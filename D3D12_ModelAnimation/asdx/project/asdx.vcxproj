@@ -1,0 +1,212 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\include\asdxCommandList.h" />
+    <ClInclude Include="..\include\asdxConnnector.h" />
+    <ClInclude Include="..\include\asdxConstantBuffer.h" />
+    <ClInclude Include="..\include\asdxDevice.h" />
+    <ClInclude Include="..\include\asdxDeviceContext.h" />
+    <ClInclude Include="..\include\asdxDescHeap.h" />
+    <ClInclude Include="..\include\asdxDesktopApp.h" />
+    <ClInclude Include="..\include\asdxFence.h" />
+    <ClInclude Include="..\include\asdxGeometry.h" />
+    <ClInclude Include="..\include\asdxHash.h" />
+    <ClInclude Include="..\include\asdxHid.h" />
+    <ClInclude Include="..\include\asdxIndexBuffer.h" />
+    <ClInclude Include="..\include\asdxLogger.h" />
+    <ClInclude Include="..\include\asdxMath.h" />
+    <ClInclude Include="..\include\asdxMisc.h" />
+    <ClInclude Include="..\include\asdxMotionPlayer.h" />
+    <ClInclude Include="..\include\asdxRef.h" />
+    <ClInclude Include="..\include\asdxRenderState.h" />
+    <ClInclude Include="..\include\asdxResMaterial.h" />
+    <ClInclude Include="..\include\asdxResMesh.h" />
+    <ClInclude Include="..\include\asdxResMotion.h" />
+    <ClInclude Include="..\include\asdxResTexture.h" />
+    <ClInclude Include="..\include\asdxShader.h" />
+    <ClInclude Include="..\include\asdxSimd.h" />
+    <ClInclude Include="..\include\asdxSound.h" />
+    <ClInclude Include="..\include\asdxStepTimer.h" />
+    <ClInclude Include="..\include\asdxStopWatch.h" />
+    <ClInclude Include="..\include\asdxSurface.h" />
+    <ClInclude Include="..\include\asdxTarget.h" />
+    <ClInclude Include="..\include\asdxTypedef.h" />
+    <ClInclude Include="..\include\asdxVertexBuffer.h" />
+    <ClInclude Include="..\src\formats\asdxResDDS.h" />
+    <ClInclude Include="..\src\formats\asdxResHDR.h" />
+    <ClInclude Include="..\src\formats\asdxResMAT.h" />
+    <ClInclude Include="..\src\formats\asdxResMSH.h" />
+    <ClInclude Include="..\src\formats\asdxResMTN.h" />
+    <ClInclude Include="..\src\formats\asdxResTGA.h" />
+    <ClInclude Include="..\src\formats\asdxResTXM.h" />
+    <ClInclude Include="..\src\formats\asdxResWIC.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\src\asdxCommandList.cpp" />
+    <ClCompile Include="..\src\asdxConnector.cpp" />
+    <ClCompile Include="..\src\asdxConstantBuffer.cpp" />
+    <ClCompile Include="..\src\asdxDescHeap.cpp" />
+    <ClCompile Include="..\src\asdxDesktopApp.cpp" />
+    <ClCompile Include="..\src\asdxDevice.cpp" />
+    <ClCompile Include="..\src\asdxDeviceContext.cpp" />
+    <ClCompile Include="..\src\asdxFence.cpp" />
+    <ClCompile Include="..\src\asdxHash.cpp" />
+    <ClCompile Include="..\src\asdxIndexBuffer.cpp" />
+    <ClCompile Include="..\src\asdxKeyboard.cpp" />
+    <ClCompile Include="..\src\asdxLogger.cpp" />
+    <ClCompile Include="..\src\asdxMisc.cpp" />
+    <ClCompile Include="..\src\asdxMotionPlayer.cpp" />
+    <ClCompile Include="..\src\asdxMouse.cpp" />
+    <ClCompile Include="..\src\asdxPad.cpp" />
+    <ClCompile Include="..\src\asdxRandom.cpp" />
+    <ClCompile Include="..\src\asdxRenderState.cpp" />
+    <ClCompile Include="..\src\asdxResMaterial.cpp" />
+    <ClCompile Include="..\src\asdxResMesh.cpp" />
+    <ClCompile Include="..\src\asdxResMotion.cpp" />
+    <ClCompile Include="..\src\asdxResTexture.cpp" />
+    <ClCompile Include="..\src\asdxShader.cpp" />
+    <ClCompile Include="..\src\asdxSound.cpp" />
+    <ClCompile Include="..\src\asdxTarget.cpp" />
+    <ClCompile Include="..\src\asdxVertexBuffer.cpp" />
+    <ClCompile Include="..\src\formats\asdxResDDS.cpp" />
+    <ClCompile Include="..\src\formats\asdxResHDR.cpp" />
+    <ClCompile Include="..\src\formats\asdxResMAT.cpp" />
+    <ClCompile Include="..\src\formats\asdxResMSH.cpp" />
+    <ClCompile Include="..\src\formats\asdxResMTN.cpp" />
+    <ClCompile Include="..\src\formats\asdxResTGA.cpp" />
+    <ClCompile Include="..\src\formats\asdxResTXM.cpp" />
+    <ClCompile Include="..\src\formats\asdxResWIC.cpp" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{1A573E4B-0F0D-4029-A572-53AA291D7957}</ProjectGuid>
+    <RootNamespace>asdx</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.10240.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="asdx.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="asdx.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="asdx.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="asdx.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <TargetName>$(ProjectName)d</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <DisableSpecificWarnings>4201;</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <DisableSpecificWarnings>4201;</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <DisableSpecificWarnings>4201;</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <DisableSpecificWarnings>4201;</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
