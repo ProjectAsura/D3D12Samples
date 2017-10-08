@@ -20,6 +20,7 @@
 #pragma comment( lib, "d3d12.lib" )
 #pragma comment( lib, "dxgi.lib" )
 #pragma comment( lib, "dxguid.lib" )
+#pragma comment( lib, "d3dcompiler.lib" )
 #pragma comment( lib, "winmm.lib" )
 #endif//ASDX_AUTO_LINK
 
@@ -123,8 +124,8 @@ struct FrameEventArgs
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 struct DropEventArgs
 {
-    const wchar_t**     Files;          //!< ファイル名リストです. 
-    uint32_t            FileCount;      //!< ファイル数です.
+    wchar_t**     Files;          //!< ファイル名リストです. 
+    uint32_t      FileCount;      //!< ファイル数です.
 
     //---------------------------------------------------------------------------------------------
     //! @brief      コンストラクタです.

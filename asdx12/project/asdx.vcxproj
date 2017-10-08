@@ -22,32 +22,32 @@
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{D02D12D7-ACC9-4A81-8222-19E8F1DFA44E}</ProjectGuid>
     <RootNamespace>asdx</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.15063.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -70,20 +70,20 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>$(ProjectDir)..\bin$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</OutDir>
-    <IntDir>$(ProjectDir)obj$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</IntDir>
+    <OutDir>$(ProjectDir)..\bin\$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)obj\$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>$(ProjectDir)..\bin$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</OutDir>
-    <IntDir>$(ProjectDir)obj$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</IntDir>
+    <OutDir>$(ProjectDir)..\bin\$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)obj\$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(ProjectDir)..\bin$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</OutDir>
-    <IntDir>$(ProjectDir)obj$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</IntDir>
+    <OutDir>$(ProjectDir)..\bin\$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)obj\$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(ProjectDir)..\bin$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</OutDir>
-    <IntDir>$(ProjectDir)obj$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</IntDir>
+    <OutDir>$(ProjectDir)..\bin\$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)obj\$(PlatformShortName)\$(PlatformToolSet)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -143,7 +143,7 @@
     <ClInclude Include="..\include\asdxPoolContainer.h" />
     <ClInclude Include="..\include\asdxRefPtr.h" />
     <ClInclude Include="..\include\asdxStepTimer.h" />
-    <ClInclude Include="..\include\asdxTexture.h" />
+    <ClInclude Include="..\include\asdxTarget.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\asdxApp.cpp" />
@@ -156,7 +156,7 @@
     <ClCompile Include="..\src\asdxFence.cpp" />
     <ClCompile Include="..\src\asdxLogger.cpp" />
     <ClCompile Include="..\src\asdxPipelineState.cpp" />
-    <ClCompile Include="..\src\asdxTexture.cpp" />
+    <ClCompile Include="..\src\asdxTarget.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -40,13 +40,12 @@ public:
     void Term();
     void Next();
     uint32_t GetCount() const;
+    uint32_t GetIndex() const;
 
-    D3D12_GPU_VIRTUAL_ADDRESS   GetAddress  () const;
     D3D12_CPU_DESCRIPTOR_HANDLE GetHandleCPU() const;
     D3D12_GPU_DESCRIPTOR_HANDLE GetHandleGPU() const;
     void* GetPtr() const;
 
-    D3D12_GPU_VIRTUAL_ADDRESS   GetAddress  (uint32_t index) const;
     D3D12_CPU_DESCRIPTOR_HANDLE GetHandleCPU(uint32_t index) const;
     D3D12_GPU_DESCRIPTOR_HANDLE GetHandleGPU(uint32_t index) const;
     void* GetPtr(uint32_t index) const;
@@ -74,7 +73,6 @@ private:
     // private variables.
     //=============================================================================================
     std::vector<Instance>   m_Instance;
-    uint32_t                m_Count;
     uint32_t                m_Index;
 
     //=============================================================================================
@@ -155,7 +153,7 @@ public:
     uint32_t* Map();
     void Unmap();
 
-    D3D12_INDEX_BUFFER_VIEW GetView();
+    D3D12_INDEX_BUFFER_VIEW GetView() const;
     size_t GetCount() const;
 
 private:

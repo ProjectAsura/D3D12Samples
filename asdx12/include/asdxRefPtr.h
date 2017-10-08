@@ -97,7 +97,7 @@ public:
     RefPtr( RefPtr&& value ) noexcept
     : m_pPtr( nullptr )
     {
-        if ( this != reinterpret_cast<RefPtr*>(&reinterpret_cast<u8&>(value)) )
+        if ( this != reinterpret_cast<RefPtr*>(&reinterpret_cast<uint8_t&>(value)) )
         { Swap(value); }
     }
 
@@ -177,7 +177,7 @@ public:
     //---------------------------------------------------------------------------------------------
     //! @brief      代入演算子です.
     //---------------------------------------------------------------------------------------------
-    RefPtr& operator = ( nullptr_type ) noexcept
+    RefPtr& operator = ( std::nullptr_t ) noexcept
     {
         Release();
         return (*this);
@@ -345,19 +345,19 @@ bool operator != ( const RefPtr<T>& a, const RefPtr<U>& b )
 { return a.GetPtr() != b.GetPtr(); }
 
 template<typename T>
-bool operator == ( const RefPtr<T>& value, nullptr_type )
+bool operator == ( const RefPtr<T>& value, std::nullptr_t )
 { return ( value.GetPtr() == nullptr ); }
 
 template<typename T>
-bool operator == ( nullptr_type, const RefPtr<T>& value )
+bool operator == ( std::nullptr_t, const RefPtr<T>& value )
 { return ( value.GetPtr() == nullptr ); }
 
 template<typename T>
-bool operator != ( const RefPtr<T>& value, nullptr_type )
+bool operator != ( const RefPtr<T>& value, std::nullptr_t )
 { return ( value.GetPtr() != nullptr ); }
 
 template<typename T>
-bool operator != ( nullptr_type, const RefPtr<T>& value )
+bool operator != ( std::nullptr_t, const RefPtr<T>& value )
 { return ( value.GetPtr() != nullptr ); }
 
 

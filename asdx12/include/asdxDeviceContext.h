@@ -9,7 +9,8 @@
 // Includes
 //-------------------------------------------------------------------------------------------------
 #include <d3d12.h>
-#include <dxgi1_6.h>
+#include <dxgi1_5.h>
+#include <list>
 #include <asdxRefPtr.h>
 #include <asdxCommandQueue.h>
 #include <asdxDescriptorHeap.h>
@@ -56,28 +57,39 @@ public:
 
     bool Init(const DeviceContextDesc& desc);
     void Term();
+    void AddToDisposer(ID3D12Object* pItem);
+    void AddToDisposer(ID3D12Object* pItem, uint32_t life);
+    void NextFrame();
 
     DeviceContextDesc   GetDesc             () const;
     ID3D12Device*       GetDevice           () const;
     IDXGIFactory5*      GetDXGIFactory      () const;
-    IDXGIAdapter4*      GetDXGIAdapter      () const;
-    IDXGIOutput6*       GetDXGIOutput       () const;
+    IDXGIAdapter3*      GetDXGIAdapter      () const;
+    IDXGIOutput5*       GetDXGIOutput       () const;
     CommandQueue*       GetGraphicsQueue    ();
     CommandQueue*       GetComputeQueue     ();
     CommandQueue*       GetCopyQueue        ();
     DescriptorHeap*     GetDescriptorHeap   (uint32_t index);
 
 private:
+    struct DisposeItem
+    {
+        ID3D12Object* pObject;
+        uint32_t      LifeCount;
+    };
+
     //=============================================================================================
     // private variables.
     //=============================================================================================
     DeviceContextDesc       m_Desc;                 //!< 構成設定です.
     RefPtr<ID3D12Device>    m_pDevice;              //!< デバイスです.
     RefPtr<IDXGIFactory5>   m_pFactory;             //!< DXGIファクトリです.
-    RefPtr<IDXGIAdapter4>   m_pAdapter;             //!< DXGIアダプターです.
-    RefPtr<IDXGIOutput6>    m_pOutput;              //!< DXGIアウトプットです.
+    RefPtr<IDXGIAdapter3>   m_pAdapter;             //!< DXGIアダプターです.
+    RefPtr<IDXGIOutput5>    m_pOutput;              //!< DXGIアウトプットです.
     CommandQueue            m_Queue[3];             //!< コマンドキューです.
     DescriptorHeap          m_DescriptorHeap[4];    //!< ディスクリプタヒープです.
+    std::list<DisposeItem>  m_Disposer;             //!< 破棄リスト.
+    std::mutex              m_Mutex;
 
     //=============================================================================================
     // private methods.

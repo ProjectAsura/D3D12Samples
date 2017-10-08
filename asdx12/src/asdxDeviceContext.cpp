@@ -18,19 +18,19 @@ namespace asdx {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 //-------------------------------------------------------------------------------------------------
-//
+//      コンストラクタです.
 //-------------------------------------------------------------------------------------------------
 DeviceContext::DeviceContext()
 { /* DO_NOTHING */ }
 
 //-------------------------------------------------------------------------------------------------
-//
+//      デストラクタです.
 //-------------------------------------------------------------------------------------------------
 DeviceContext::~DeviceContext()
 { Term(); }
 
 //-------------------------------------------------------------------------------------------------
-//
+//      初期化処理を行います.
 //-------------------------------------------------------------------------------------------------
 bool DeviceContext::Init(const DeviceContextDesc& desc)
 {
@@ -76,7 +76,7 @@ bool DeviceContext::Init(const DeviceContextDesc& desc)
         heap_desc.NumDescriptors = desc.MaxCountRes;
         heap_desc.Type  = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        if ( !m_DescriptorHeap[heap_desc.Type].Init(m_pDevice, &heap_desc ) )
+        if ( !m_DescriptorHeap[heap_desc.Type].Init(m_pDevice.GetPtr(), &heap_desc ) )
         { return false; }
     }
 
@@ -85,7 +85,7 @@ bool DeviceContext::Init(const DeviceContextDesc& desc)
         heap_desc.NumDescriptors = desc.MaxCountSmp;
         heap_desc.Type  = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
         heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        if ( !m_DescriptorHeap[heap_desc.Type].Init(m_pDevice, &heap_desc ) )
+        if ( !m_DescriptorHeap[heap_desc.Type].Init(m_pDevice.GetPtr(), &heap_desc ) )
         { return false; }
     }
 
@@ -93,7 +93,7 @@ bool DeviceContext::Init(const DeviceContextDesc& desc)
         D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
         heap_desc.NumDescriptors = desc.MaxCountRTV;
         heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-        if ( !m_DescriptorHeap[heap_desc.Type].Init(m_pDevice, &heap_desc ) )
+        if ( !m_DescriptorHeap[heap_desc.Type].Init(m_pDevice.GetPtr(), &heap_desc ) )
         { return false; }
     }
 
@@ -101,7 +101,7 @@ bool DeviceContext::Init(const DeviceContextDesc& desc)
         D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
         heap_desc.NumDescriptors = desc.MaxCountDSV;
         heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-        if ( !m_DescriptorHeap[heap_desc.Type].Init(m_pDevice, &heap_desc ) )
+        if ( !m_DescriptorHeap[heap_desc.Type].Init(m_pDevice.GetPtr(), &heap_desc ) )
         { return false; }
     }
 
@@ -120,15 +120,30 @@ bool DeviceContext::Init(const DeviceContextDesc& desc)
 }
 
 //-------------------------------------------------------------------------------------------------
-//
+//      終了処理です.
 //-------------------------------------------------------------------------------------------------
 void DeviceContext::Term()
 {
+    std::lock_guard<std::mutex> locker(m_Mutex);
+
     for(auto i=0; i<3; ++i)
     { m_Queue[i].Term(); }
 
     for(auto i=0; i<4; ++i)
     { m_DescriptorHeap[i].Term(); }
+
+    auto itr = m_Disposer.begin();
+    while(itr != m_Disposer.end())
+    {
+        if (itr->pObject != nullptr)
+        {
+            itr->pObject->Release();
+            itr->pObject = nullptr;
+        }
+
+        itr++;
+    }
+    m_Disposer.clear();
 
     m_pDevice.Reset();
     m_pOutput.Reset();
@@ -138,55 +153,96 @@ void DeviceContext::Term()
 }
 
 //-------------------------------------------------------------------------------------------------
-//
+//      破棄リストに追加します.
+//-------------------------------------------------------------------------------------------------
+void DeviceContext::AddToDisposer(ID3D12Object* pObject, uint32_t life)
+{
+    // 念のためにスレッドを止める.
+    std::lock_guard<std::mutex> locker(m_Mutex);
+
+    DisposeItem item;
+    item.pObject   = pObject;
+    item.LifeCount = life;
+
+    m_Disposer.push_back(item);
+}
+
+//-------------------------------------------------------------------------------------------------
+//      次のフレームに進みます.
+//-------------------------------------------------------------------------------------------------
+void DeviceContext::NextFrame()
+{
+    // 別スレッドでAddToDisposer() が呼ばれていると困るので，念のためにスレッドを止める.
+    std::lock_guard<std::mutex> locker(m_Mutex);
+
+    auto itr = m_Disposer.begin();
+    while(itr != m_Disposer.end())
+    {
+        itr->LifeCount--;
+        if (itr->LifeCount == 0)
+        {
+            itr->pObject->Release();
+            itr->pObject = nullptr;
+
+            itr = m_Disposer.erase(itr);
+        }
+        else
+        {
+            itr++;
+        }
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+//      構成設定を取得します.
 //-------------------------------------------------------------------------------------------------
 DeviceContextDesc DeviceContext::GetDesc() const
 { return m_Desc; }
 
 //-------------------------------------------------------------------------------------------------
-//
+//      デバイスを取得します.
 //-------------------------------------------------------------------------------------------------
 ID3D12Device* DeviceContext::GetDevice() const
 { return m_pDevice.GetPtr(); }
 
 //-------------------------------------------------------------------------------------------------
-//
+//      DXGIファクトリーを取得します.
 //-------------------------------------------------------------------------------------------------
 IDXGIFactory5* DeviceContext::GetDXGIFactory() const
 { return m_pFactory.GetPtr(); }
 
 //-------------------------------------------------------------------------------------------------
-//
+//      DXGIアダプターを取得します.
 //-------------------------------------------------------------------------------------------------
-IDXGIAdapter4* DeviceContext::GetDXGIAdapter() const
+IDXGIAdapter3* DeviceContext::GetDXGIAdapter() const
 { return m_pAdapter.GetPtr(); }
 
 //-------------------------------------------------------------------------------------------------
-//
+//      DXGIアウトプットを取得します.
 //-------------------------------------------------------------------------------------------------
-IDXGIOutput6* DeviceContext::GetDXGIOutput() const
+IDXGIOutput5* DeviceContext::GetDXGIOutput() const
 { return m_pOutput.GetPtr(); }
 
 //-------------------------------------------------------------------------------------------------
-//
+//      グラフィックスキューを取得します.
 //-------------------------------------------------------------------------------------------------
 CommandQueue* DeviceContext::GetGraphicsQueue()
 { return &m_Queue[0]; }
 
 //-------------------------------------------------------------------------------------------------
-//
+//      コンピュートキューを取得します.
 //-------------------------------------------------------------------------------------------------
 CommandQueue* DeviceContext::GetComputeQueue()
 { return &m_Queue[1]; }
 
 //-------------------------------------------------------------------------------------------------
-//
+//      コピーキューを取得します.
 //-------------------------------------------------------------------------------------------------
 CommandQueue* DeviceContext::GetCopyQueue()
 { return &m_Queue[2]; }
 
 //-------------------------------------------------------------------------------------------------
-//
+//      ディスクリプタヒープを取得します.
 //-------------------------------------------------------------------------------------------------
 DescriptorHeap* DeviceContext::GetDescriptorHeap(uint32_t index)
 {

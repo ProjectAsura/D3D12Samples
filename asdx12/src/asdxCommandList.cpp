@@ -53,7 +53,7 @@ bool CommandList::Init(ID3D12Device* pDevice, D3D12_COMMAND_LIST_TYPE type, uint
         auto hr = pDevice->CreateCommandList(
             1,
             type,
-            m_pAllocators[0].Get(),
+            m_pAllocators[0],
             nullptr,
             IID_PPV_ARGS(&m_pCmdList));
         if (FAILED(hr))
@@ -95,7 +95,7 @@ void CommandList::Term()
 //-------------------------------------------------------------------------------------------------
 ID3D12GraphicsCommandList* CommandList::Reset()
 {
-    auto hr = m_pCmdList->Reset(m_pAllocators[m_Index].Get(), nullptr);
+    auto hr = m_pCmdList->Reset(m_pAllocators[m_Index], nullptr);
     if (FAILED(hr))
     { return nullptr; }
 

@@ -57,7 +57,7 @@ bool CommandQueue::Init(ID3D12Device* pDevice, D3D12_COMMAND_LIST_TYPE type, uin
 
     m_SubmitIndex = 0;
 
-    auto hr = pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddress()));
+    hr = pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddress()));
     if (FAILED(hr))
     { return false; }
 

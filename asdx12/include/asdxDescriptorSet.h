@@ -26,7 +26,6 @@ enum ShaderStage
     DS,     // Domain Shader
     HS,     // Hull Shader
     GS,     // Geometry Shader
-    CS,     // Compute Shader
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,13 +53,16 @@ public:
     void AddSRV(ShaderStage stage, uint32_t reg);
     void AddUAV(ShaderStage stage, uint32_t reg);
     void AddSmp(ShaderStage stage, uint32_t reg);
+    void SetFlags(D3D12_ROOT_SIGNATURE_FLAGS value);
 
 private:
     //=============================================================================================
     // private variables.
     //=============================================================================================
-    std::vector<D3D12_DESCRIPTOR_RANGE> m_Range;
-    std::vector<D3D12_ROOT_PARAMETER>   m_Param;
+    std::vector<D3D12_DESCRIPTOR_RANGE*> m_Range;
+    std::vector<D3D12_ROOT_PARAMETER>    m_Param;
+    std::vector<uint32_t>                m_Hash;
+    D3D12_ROOT_SIGNATURE_FLAGS           m_Flags;
 
     //=============================================================================================
     // private methods.
@@ -92,21 +94,25 @@ public:
     bool Init(ID3D12Device* pDevice, const DescriptorLayout& layout);
     void Term();
 
-    void SetCBV(ShaderStage stage, uint32_t reg, D3D12_GPU_DESCRIPTOR_HANDLE handle);
-    void SetSRV(ShaderStage stage, uint32_t reg, D3D12_GPU_DESCRIPTOR_HANDLE handle);
-    void SetUAV(ShaderStage stage, uint32_t reg, D3D12_GPU_DESCRIPTOR_HANDLE handle);
-    void SetSmp(ShaderStage stage, uint32_t reg, D3D12_GPU_DESCRIPTOR_HANDLE handle);
-    void MakeCommand(ID3D12GraphicsCommandList* pCmdList);
+    bool SetCBV(ShaderStage stage, uint32_t reg, D3D12_GPU_DESCRIPTOR_HANDLE handle);
+    bool SetSRV(ShaderStage stage, uint32_t reg, D3D12_GPU_DESCRIPTOR_HANDLE handle);
+    bool SetUAV(ShaderStage stage, uint32_t reg, D3D12_GPU_DESCRIPTOR_HANDLE handle);
+    bool SetSmp(ShaderStage stage, uint32_t reg, D3D12_GPU_DESCRIPTOR_HANDLE handle);
+    void MakeCommand(ID3D12GraphicsCommandList* pCmdList) const;
 
     ID3D12RootSignature* GetRootSignature() const;
 
 private:
+    struct Table
+    {
+        uint32_t                    Index;
+        D3D12_GPU_DESCRIPTOR_HANDLE Handle;
+    };
     //=============================================================================================
     // private variables.
     //=============================================================================================
-    RefPtr<ID3D12RootSignature>                 m_pRootSignature;
-    std::map<uint32_t, uint32_t>                m_IndexMap;
-    std::vector<D3D12_GPU_DESCRIPTOR_HANDLE>    m_Handle;
+    RefPtr<ID3D12RootSignature>     m_pRootSignature;
+    std::map<uint32_t, Table>       m_Tables;
 
     //=============================================================================================
     // private methods.
