@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+ 
+  <ItemDefinitionGroup>
+    <DXCTask>
+      <!--Enter Defaults Here-->
+      <ObjectFileOutput>$(OutDir)%(Filename).cso</ObjectFileOutput>
+      <HeaderFileOutput>$(OutDir)%(Filename).inc</HeaderFileOutput>
+      <AdditionalOptions></AdditionalOptions>
+      <EntryPointName>main</EntryPointName>
+      <ShaderModel>_6_5</ShaderModel>
+      <TreatWarningAsError>True</TreatWarningAsError>
+      <SuppressStartupBanner>True</SuppressStartupBanner>
+      <VariableName>%(Filename)</VariableName>
+      <EnableDebuggingInformation Condition="'$(Configuration)' == 'Debug'">True</EnableDebuggingInformation>
+      <EnableDebuggingInformation Condition="!('$(Configuration)' == 'Debug')">False</EnableDebuggingInformation>
+      <DisableOptimizations Condition="'$(Configuration)' == 'Debug'">True</DisableOptimizations>
+      <DisableOptimizations Condition="!('$(Configuration)' == 'Debug')">False</DisableOptimizations>
+      <CommandLineTemplate>dxc.exe [AllOptions] [Inputs]</CommandLineTemplate>
+    </DXCTask>
+  </ItemDefinitionGroup>
+ 
+</Project>

@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ProjectSchemaDefinitions xmlns="http://schemas.microsoft.com/build/2009/properties" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:sys="clr-namespace:System;assembly=mscorlib">
+  <Rule Name="DXCTask"
+        PageTemplate="tool"
+        DisplayName="DXC コンパイラ"
+        SwitchPrefix="-"
+        Order="300">
+    <Rule.Categories>
+      <Category Name="General" DisplayName="全般"/>
+      <Category Name="Advanced" DisplayName="詳細設定"/>
+      <Category Name="Output Files" DisplayName="出力ファイル"/>
+      <Category Name="All Options" DisplayName="すべてのオプション" Subtype="Search"/>
+      <Category Name="Command Line" DisplayName="コマンド ライン" Subtype="CommandLine"/>
+    </Rule.Categories>
+ 
+    <Rule.DataSource>
+      <DataSource Persistence="ProjectFile" ItemType="DXCTask" Label="" HasConfigurationCondition="true" />
+    </Rule.DataSource>
+    
+    <StringProperty Name="Inputs" Category="Command Line" IsRequired="true">
+        <StringProperty.DataSource>
+            <DataSource Persistence="ProjectFile" ItemType="DXCTask" SourceType="Item" />
+        </StringProperty.DataSource>
+    </StringProperty>
+    
+    <BoolProperty Name="SuppressStartupBanner" DisplayName="著作権情報の非表示" Description="コンパイルの開始時に、著作権情報を表示しません。(-nologo)" Category="Advanced" Switch="nologo"/>
+    <BoolProperty Name="TreatWarningAsError" DisplayName="警告をエラーとして扱う" Description="すべてのコンパイラ警告をエラーとして扱います。新しいプロジェクトの場合、すべてのコンパイルで -WX を使用することをお勧めします。すべての警告を解決することで、コードの欠陥を見逃す可能性が低くなります。" Category="Advanced" Switch="WX" />
+    
+    <StringListProperty Subtype="folder" Name="AdditionalIncludeDirectories" DisplayName="追加のインクルード ディレクトリ" Description="インクルード パスに追加するディレクトリを指定します。複数指定する場合には、セミコロンで区切ってください。(-I[パス])" Category="General" Switch="I" />
+    <StringProperty Name="EntryPointName" DisplayName="エントリ ポイント名" Description="シェーダーのエントリ ポイントの名前を指定します (-E[名前])" Category="General" Switch="E " />
+    <BoolProperty Name="DisableOptimizations" DisplayName="最適化を無効にする" Description="最適化を無効にします。-Od は -Gfp を暗黙に指定しますが、出力は -Od -Gfp とは異なる場合があります。" Category="General" Switch="Od" />
+    <BoolProperty Name="EnableDebuggingInformation" DisplayName="デバッグ情報を有効にする" Description="デバッグ情報を有効にします。" Category="General" Switch="Zi" />
+    
+    <EnumProperty Name="ShaderType" DisplayName="シェーダーの種類" Description="シェーダーの種類を指定します。(-T [種類]_[モデル])" Category="General">
+     <EnumValue Name="Vertex" Switch="T vs" DisplayName="頂点シェーダー">
+        <Argument Property="ShaderModel" IsRequired="true" Separator="_"/>
+      </EnumValue>
+      <EnumValue Name="Pixel" Switch="T ps" DisplayName="ピクセル シェーダー">
+        <Argument Property="ShaderModel" IsRequired="true" Separator="_"/>
+      </EnumValue>
+      <EnumValue Name="Geometry" Switch="T gs" DisplayName="ジオメトリ シェーダー">
+        <Argument Property="ShaderModel" IsRequired="true" Separator="_"/>
+      </EnumValue>
+      <EnumValue Name="Hull" Switch="T hs" DisplayName="ハル シェーダー">
+        <Argument Property="ShaderModel" IsRequired="true" Separator="_"/>
+      </EnumValue>
+      <EnumValue Name="Domain" Switch="T ds" DisplayName="ドメイン シェーダー">
+        <Argument Property="ShaderModel" IsRequired="true" Separator="_"/>
+      </EnumValue>
+      <EnumValue Name="Compute" Switch="T cs" DisplayName="コンピュートシェーダー">
+        <Argument Property="ShaderModel" IsRequired="true" Separator="_"/>
+      </EnumValue>
+      <EnumValue Name="Library" Switch="T lib" DisplayName="ライブラリ">
+        <Argument Property="ShaderModel" IsRequired="true" Separator="_"/>
+      </EnumValue>
+      <EnumValue Name="Mesh" Switch="T ms" DisplayName="メッシュシェーダー">
+        <Argument Property="ShaderModel" IsRequired="true" Separator="_"/>
+      </EnumValue>
+      <EnumValue Name="Amplification" Switch="T as" DisplayName="増幅シェーダー">
+        <Argument Property="ShaderModel" IsRequired="true" Separator="_"/>
+      </EnumValue>
+    </EnumProperty>
+    
+    <EnumProperty Name="ShaderModel" DisplayName="シェーダモデル" Description="シェーダー モデルを指定します。いくつかのシェーダーの種類は最新のシェーダー モデルでしか使用できません (-T [種類]_[モデル])" Category="General" >
+        <EnumValue Name="_6_0" Switch="6_0" DisplayName="Shader Model 6.0" />
+        <EnumValue Name="_6_1" Switch="6_1" DisplayName="Shader Model 6.1" />
+        <EnumValue Name="_6_2" Switch="6_2" DisplayName="Shader Model 6.2" />
+        <EnumValue Name="_6_3" Switch="6_3" DisplayName="Shader Model 6.3" />
+        <EnumValue Name="_6_4" Switch="6_4" DisplayName="Shader Model 6.4" />
+        <EnumValue Name="_6_5" Switch="6_5" DisplayName="Shader Model 6.5" />
+    </EnumProperty>    
+ 
+    <StringListProperty Name="PreprocessorDefinitions" DisplayName="プリプロセッサの定義" Description="ソース ファイルの前処理シンボルを定義します。" Category="General" Switch="D " />
+
+    <StringProperty Name="VariableName" DisplayName="ヘッダー変数名" Description="ヘッダー ファイル内の変数名を指定します (-Vn [名前])" Category="Output Files" Switch="Vn" F1Keyword="VC.Project.FXCompilerTool.VariableName"/>
+    <StringProperty Subtype="file" Name="HeaderFileOutput" DisplayName="ヘッダー ファイル名" Description="オブジェクト コードを含むヘッダー ファイル名を指定します。(-Fh [名前])" Category="Output Files" Switch="Fh " />
+    <StringProperty Subtype="file" Name="ReflectionFileOutput" DisplayName="リフレクション ファイル名" Description="シェーダリフレクションを出力するファイル名を指定します。(-Fre [名前])" Category="Output Files" Switch="Fre " />
+    <StringProperty Subtype="file" Name="RootSignatureFileOutput" DisplayName="ルート署名 ファイル名" Description="ルート署名を出力するファイル名を指定します。(-Frs [名前])" Category="Output Files" Switch="Frs " />
+    <StringProperty Subtype="file" Name="ObjectFileOutput" DisplayName="オブジェクト ファイル名" Description="オブジェクト ファイル名を指定します。(-Fo [名前])" Category="Output Files" Switch="Fo " />
+    <StringProperty Name="AssemblerOutputFile" Subtype="file" DisplayName="アセンブラー出力ファイル" Description="アセンブリ コード リスティング ファイルの名前を指定します" Category="Output Files" Switch="Fc "/>
+    <StringProperty Name="CommandLineTemplate" DisplayName="コマンドライン" Visible="False" IncludeInCommandLine="False" />
+    <StringProperty Subtype="AdditionalOptions" Name="AdditionalOptions" Category="Command Line" DisplayName="追加のオプション" Description="追加のオプション" />
+
+  </Rule>
+
+  <ItemType Name="DXCTask" DisplayName="DXC コンパイラ" />
+  <ContentType Name="DXCTask" ItemType="DXCTask" DisplayName="DXC コンパイラ" />
+  <FileExtension Name=".hlsl" ContentType="DXCTask" />
+</ProjectSchemaDefinitions>

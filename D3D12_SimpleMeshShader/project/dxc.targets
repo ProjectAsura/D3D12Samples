@@ -1,0 +1,74 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <ItemGroup>
+    <PropertyPageSchema Include="$(MSBuildThisFileDirectory)$(MSBuildThisFileName).xml" />
+    <AvailableItemName Include="DXCTask">
+      <Targets>DXC</Targets>
+    </AvailableItemName>
+  </ItemGroup>
+
+  <UsingTask
+    TaskName="DXCTask"
+    TaskFactory="XamlTaskFactory"
+    AssemblyName="Microsoft.Build.Tasks.v4.0">
+    <Task>$(MSBuildThisFileDirectory)$(MSBuildThisFileName).xml</Task>
+  </UsingTask>
+
+  <Target Name="_WriteDXCTaskTlogs"
+        Condition="'@(DXCTask)' != '' and '@(SelectedFiles)' == ''">
+    <ItemGroup>
+      <_DXCTaskReadTlog Include="^%(DXCTask.FullPath);%(DXCTask.AdditionalDependencies)"
+                      Condition="'%(DXCTask.ExcludedFromBuild)' != 'true' and '%(DXC.ObjectFileOutput)' != ''"/>
+      <_DXCTaskWriteTlog Include="^%(DXCTask.FullPath);$([MSBuild]::NormalizePath('$(OutDir)Resources', '%(DXCTask.ObjectFileOutput)'))"
+                       Condition="'%(DXCTask.ExcludedFromBuild)' != 'true' and '%(DXCTask.ObjectFileOutput)' != ''"/>
+    </ItemGroup>
+
+    <WriteLinesToFile
+      Condition = "'@(_DXCTaskReadTlog)' != ''"
+      File      = "$(TLogLocation)DXCTask.read.1u.tlog"
+      Lines     = "@(_DXCTaskReadTlog->MetaData('Identity'));"
+      Overwrite = "true"
+      Encoding  = "Unicode"/>
+    <WriteLinesToFile
+      Condition = "'@(_DXCTaskWriteTlog)' != ''"
+      File      = "$(TLogLocation)DXCTask.write.1u.tlog"
+      Lines     = "@(_DXCTaskWriteTlog->MetaData('Identity'));"
+      Overwrite = "true"
+      Encoding  = "Unicode"/>
+
+    <ItemGroup>
+      <_DXCTaskReadTlog Remove="@(_DXCTaskReadTlog)" />
+      <_DXCTaskWriteTlog Remove="@(_DXCTaskWriteTlog)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="DXC" Condition="'@(DXCTask)' != ''" BeforeTargets="ClCompile" DependsOnTargets="_WriteDXCTaskTlogs;_SelectedFiles" >
+    <ItemGroup Condition="'@(SelectedFiles)' != ''">
+      <DXCTask Remove="@(DXCTask)" Condition="'%(Identity)' != '@(SelectedFiles)'" />
+    </ItemGroup>
+
+    <Message Importance="High" Text="DXC : %(DXCTask.Filename)%(DXCTask.Extension)" />
+    <DXCTask
+        AdditionalIncludeDirectories = "%(DXCTask.AdditionalIncludeDirectories)"
+        SuppressStartupBanner        = "%(DXCTask.SuppressStartupBanner)"
+        TreatWarningAsError          = "%(DXCTask.TreatWarningAsError)"
+        PreprocessorDefinitions      = "%(DXCTask.PreprocessorDefinitions)"
+        AdditionalOptions            = "%(DXCTask.AdditionalOptions)"
+        DisableOptimizations         = "%(DXCTask.DisableOptimizations)"
+        EnableDebuggingInformation   = "%(DXCTask.EnableDebuggingInformation)"
+        EntryPointName               = "%(DXCTask.EntryPointName)"
+        HeaderFileOutput             = "%(DXCTask.HeaderFileOutput)"
+        ReflectionFileOutput         = "%(DXCTask.ReflectionFileOutput)"
+        RootSignatureFileOutput      = "%(DXCTask.RootSignatureFileOutput)"
+        ObjectFileOutput             = "%(DXCTask.ObjectFileOutput)"
+        AssemblerOutputFile          = "%(DXCTask.AssemblerOutputFile)"
+        VariableName                 = "%(DXCTask.VariableName)"
+        ShaderModel                  = "%(DXCTask.ShaderModel)"
+        ShaderType                   = "%(DXCTask.ShaderType)"
+        CommandLineTemplate          = "%(DXCTask.CommandLineTemplate)"
+        Inputs                       = "%(DXCTask.Identity)"
+    />
+  </Target>
+
+</Project>
