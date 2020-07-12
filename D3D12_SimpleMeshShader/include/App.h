@@ -1,4 +1,4 @@
-//-------------------------------------------------------------------------------------------------
+ï»¿//-------------------------------------------------------------------------------------------------
 // File : App.h
 // Desc : Application Module.
 // Copyright(c) Project Asura. All right reserved.
@@ -75,7 +75,7 @@ private:
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // ResConstantBuffer structure
     ///////////////////////////////////////////////////////////////////////////////////////////////
-    ASDX_ALIGN(256)             // ’è”ƒoƒbƒtƒ@‚Í 256 byte ƒAƒ‰ƒCƒƒ“ƒg•K{.
+    ASDX_ALIGN(256)             // å®šæ•°ãƒãƒƒãƒ•ã‚¡ã¯ 256 byte ã‚¢ãƒ©ã‚¤ãƒ¡ãƒ³ãƒˆå¿…é ˆ.
     struct ResConstantBuffer
     {
         asdx::Matrix   World;
@@ -103,7 +103,7 @@ private:
     asdx::RefPtr<ID3D12PipelineState>        m_pPipelineState;
     asdx::RefPtr<ID3D12GraphicsCommandList6> m_pCmdList;
     asdx::RefPtr<ID3D12Resource>             m_pVertexBuffer;
-    asdx::RefPtr<ID3D12Resource>             m_pPrimitiveIndexBuffer;
+    asdx::RefPtr<ID3D12Resource>             m_pIndexBuffer;
     asdx::RefPtr<ID3D12Resource>             m_pConstantBuffer;
     asdx::RefPtr<ID3D12Fence>                m_pFence;
     UINT                                     m_FrameIndex;
