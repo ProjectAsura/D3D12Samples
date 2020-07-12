@@ -19,8 +19,8 @@
         Condition="'@(DXCTask)' != '' and '@(SelectedFiles)' == ''">
     <ItemGroup>
       <_DXCTaskReadTlog Include="^%(DXCTask.FullPath);%(DXCTask.AdditionalDependencies)"
-                      Condition="'%(DXCTask.ExcludedFromBuild)' != 'true' and '%(DXC.ObjectFileOutput)' != ''"/>
-      <_DXCTaskWriteTlog Include="^%(DXCTask.FullPath);$([MSBuild]::NormalizePath('$(OutDir)Resources', '%(DXCTask.ObjectFileOutput)'))"
+                      Condition="'%(DXCTask.ExcludedFromBuild)' != 'true' and '%(DXCTask.ObjectFileOutput)' != ''"/>
+      <_DXCTaskWriteTlog Include="^%(DXCTask.FullPath);$([MSBuild]::NormalizePath('%(DXCTask.ObjectFileOutput)'))"
                        Condition="'%(DXCTask.ExcludedFromBuild)' != 'true' and '%(DXCTask.ObjectFileOutput)' != ''"/>
     </ItemGroup>
 
@@ -50,6 +50,7 @@
 
     <Message Importance="High" Text="DXC : %(DXCTask.Filename)%(DXCTask.Extension)" />
     <DXCTask
+        Condition                    = "'@(DXCTask)' != '' and '%(DXCTask.ExcludedFromBuild)' != 'true'"
         AdditionalIncludeDirectories = "%(DXCTask.AdditionalIncludeDirectories)"
         SuppressStartupBanner        = "%(DXCTask.SuppressStartupBanner)"
         TreatWarningAsError          = "%(DXCTask.TreatWarningAsError)"
