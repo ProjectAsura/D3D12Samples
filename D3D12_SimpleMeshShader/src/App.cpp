@@ -741,12 +741,6 @@ bool App::InitApp()
 
     // パイプラインステートの生成.
     {
-        // 入力レイアウトの設定.
-        D3D12_INPUT_ELEMENT_DESC inputElements[] = {
-            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-            { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        };
-
         // ラスタライザーステートの設定.
         D3D12_RASTERIZER_DESC descRS;
         descRS.FillMode                 = D3D12_FILL_MODE_SOLID;
@@ -776,10 +770,6 @@ bool App::InitApp()
         descBS.IndependentBlendEnable = FALSE;
         for( UINT i=0; i<D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i )
         { descBS.RenderTarget[i] = descRTBS; }
-
-        D3D12_INPUT_LAYOUT_DESC layout;
-        layout.pInputElementDescs   = inputElements;
-        layout.NumElements          = _countof(inputElements);
 
         D3D12_SHADER_BYTECODE ms;
         ms.pShaderBytecode  = SimpleMS;
