@@ -116,7 +116,7 @@ private:
     UINT8*                                   m_pCbvDataBegin;
     FLOAT                                    m_RotateAngle;
     Descriptor                               m_VerticesSRV;
-    Descriptor                               m_PrimitiveIndicesSRV;
+    Descriptor                               m_IndicesSRV;
 
     //=============================================================================================
     // private methods.

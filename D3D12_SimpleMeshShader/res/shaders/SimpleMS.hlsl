@@ -49,7 +49,7 @@ void main
     out primitives PrimitiveOutput prims[1]     // primitivesはオプション属性.
 )
 {
-    // スレッドグループの頂点とプリミティブの数を設定. この関数の呼び出しは必須.
+    // スレッドグループの頂点とプリミティブの数を設定.
     SetMeshOutputCounts(3, 1);
 
     if (groupIndex < 1)

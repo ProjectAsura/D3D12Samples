@@ -993,8 +993,8 @@ bool App::InitApp()
 
         m_pDevice->CreateShaderResourceView(m_pIndexBuffer.GetPtr(), &viewDesc, handleCPU);
 
-        m_PrimitiveIndicesSRV.HandleCPU = handleCPU;
-        m_PrimitiveIndicesSRV.HandleGPU = handleGPU;
+        m_IndicesSRV.HandleCPU = handleCPU;
+        m_IndicesSRV.HandleGPU = handleGPU;
         handleCPU.ptr += m_ResDescriptorSize;
         handleGPU.ptr += m_ResDescriptorSize;
     }
@@ -1012,7 +1012,7 @@ void App::TermApp()
     m_pIndexBuffer.Reset();
 
     memset(&m_VerticesSRV, 0, sizeof(m_VerticesSRV));
-    memset(&m_PrimitiveIndicesSRV, 0, sizeof(m_PrimitiveIndicesSRV));
+    memset(&m_IndicesSRV, 0, sizeof(m_IndicesSRV));
 
     m_pPipelineState.Reset();
     m_pRootSignature.Reset();
