@@ -104,7 +104,6 @@ using PSS_SAMPLE_DESC           = PSSubObject< DXGI_SAMPLE_DESC,                
 using PSS_NODE_MASK             = PSSubObject< UINT,                            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK >;
 using PSS_CACHED_PSO            = PSSubObject< D3D12_CACHED_PIPELINE_STATE,     D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO >;
 using PSS_FLAGS                 = PSSubObject< D3D12_PIPELINE_STATE_FLAGS,      D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS >;
-using PSS_PRIMITIVE_TOPOLOGY    = PSSubObject< D3D12_PRIMITIVE_TOPOLOGY_TYPE,   D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY >;
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -120,7 +119,6 @@ struct GEOMETRY_PIPELINE_STATE_DESC
     PSS_SAMPLE_MASK         SampleMask;
     PSS_RASTERIZER          RasterizerState;
     PSS_DEPTH_STENCIL       DepthStencilState;
-    PSS_PRIMITIVE_TOPOLOGY  PrimitiveTopologyType;
     PSS_RTV_FORMATS         RTVFormats;
     PSS_DSV_FORMAT          DSVFormat;
     PSS_SAMPLE_DESC         SampleDesc;
@@ -811,7 +809,6 @@ bool App::InitApp()
         descGPS.RasterizerState         = descRS;
         descGPS.DepthStencilState       = descDSS;
         descGPS.SampleMask              = UINT_MAX;
-        descGPS.PrimitiveTopologyType   = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         descGPS.RTVFormats              = rtvFormats;
         descGPS.DSVFormat               = DXGI_FORMAT_D32_FLOAT;
         descGPS.SampleDesc              = descSample;
