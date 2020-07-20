@@ -10,6 +10,7 @@
 //-------------------------------------------------------------------------------------------------
 #include <asdxMath.h>
 #include <vector>
+#include <string>
 
 
 namespace asdx {

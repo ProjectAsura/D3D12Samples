@@ -21,6 +21,15 @@
     <None Include="..\include\asdxMath.inl">
       <Filter>Header Files</Filter>
     </None>
+    <None Include="..\include\asdxNeon.inl">
+      <Filter>Header Files</Filter>
+    </None>
+    <None Include="..\include\asdxNonSimd.inl">
+      <Filter>Header Files</Filter>
+    </None>
+    <None Include="..\include\asdxSse.inl">
+      <Filter>Header Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\res\SimplePS.hlsl">
@@ -115,6 +124,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\include\asdxDescHeap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\asdxSimd.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

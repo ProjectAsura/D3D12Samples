@@ -142,6 +142,10 @@ std::wstring GetExePath()
 //-------------------------------------------------------------------------------------------------
 std::wstring GetExt( const char16* filePath )
 {
+    auto func = [](wchar_t in) {
+        return (wchar_t)(tolower((int)in));
+    };
+
     std::wstring path = filePath;
     auto idx = path.find_last_of( L"." );
     if ( idx != std::wstring::npos )
@@ -149,7 +153,7 @@ std::wstring GetExt( const char16* filePath )
         std::wstring result = path.substr( idx + 1 );
 
         // 小文字化.
-        std::transform( result.begin(), result.end(), result.begin(), tolower );
+        std::transform( result.begin(), result.end(), result.begin(), func );
 
         return result;
     }
