@@ -46,6 +46,7 @@ struct alignas(256) SceneParam
     float           Padding0;
     asdx::Vector3   DebugCamearPos;
     float           Padding1;
+    asdx::Vector4   DebugPlanes[6];
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -236,9 +237,12 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& param)
 
     // メッシュバッファ更新.
     {
+        // メリタ製サイズに戻す.
+        auto scale = asdx::Vector3(1.0f, 4.0f / 3.0f, 1.0f);
+
         auto ptr = m_MeshBuffer.MapAs<MeshParam>();
-        ptr->World = asdx::Matrix::CreateIdentity();
-        ptr->Scale = 1.0f;
+        ptr->World = asdx::Matrix::CreateScale(scale);
+        ptr->Scale = asdx::Max(scale.x, asdx::Max(scale.y, scale.z));
         m_MeshBuffer.Unmap();
     }
 
@@ -254,11 +258,14 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& param)
         ptr->View = m_CameraController.GetView();
         ptr->Proj = proj;
         ptr->CameraPos = m_CameraController.GetPosition();
+        asdx::CalcFrustumPlanes(ptr->View, ptr->Proj, ptr->Planes);
 
         if (!m_DebugPause)
-        { ptr->DebugCamearPos = ptr->CameraPos; }
-
-        asdx::CalcFrustumPlanes(ptr->View, ptr->Proj, ptr->Planes);
+        {
+            ptr->DebugCamearPos = ptr->CameraPos;
+            for(auto i=0; i<6; ++i)
+            { ptr->DebugPlanes[i] = ptr->Planes[i]; }
+        }
 
         m_SceneBuffer.Unmap();
     }

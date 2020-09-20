@@ -54,6 +54,7 @@ struct SceneParam
     float       Padding0;
     float3      DebugCameraPos;
     float       Padding1;
+    float4      DebugPlanes[6];
 };
 
 ///////////////////////////////////////////////////////////////////////////////

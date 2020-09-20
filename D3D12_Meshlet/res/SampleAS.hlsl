@@ -32,7 +32,10 @@ struct SceneParam
     float4x4    Proj;
     float4      Planes[6];
     float3      CameraPos;
+    float       Padding0;
     float3      DebugCameraPos;
+    float       Padding1;
+    float4      DebugPlanes[6];
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -63,7 +66,7 @@ struct PayloadParam
 //-----------------------------------------------------------------------------
 // Resources.
 //-----------------------------------------------------------------------------
-groupshared PayloadParam   s_Payload;
+groupshared PayloadParam    s_Payload;
 ConstantBuffer<SceneParam>  CbScene         : register(b0);
 ConstantBuffer<MeshParam>   CbMesh          : register(b1);
 ConstantBuffer<MeshletInfo> CbMeshletInfo   : register(b2);
@@ -72,19 +75,27 @@ StructuredBuffer<CullInfo>  CullInfos       : register(t0);
 //-----------------------------------------------------------------------------
 //      可視性をチェックします.
 //-----------------------------------------------------------------------------
-bool IsVisible(CullInfo cullData, float3 cameraPos, float4x4 world, float scale)
+bool IsVisible
+(
+    CullInfo    cullData,
+    float3      cameraPos,
+    float4      planes[6],
+    float4x4    world,
+    float       scale
+)
 {
     // [-1, 1]に展開.
     float4 normalCone = UnpackSnorm4(cullData.NormalCone);
 
     // ワールド空間に変換.
     float3 center = mul(world, float4(cullData.BoundingSphere.xyz, 1.0f)).xyz;
-    float3 axis = normalize(mul(world, float4(normalCone.xyz, 0.0f)).xyz);
+    float3 axis = normalize(mul((float3x3)world, normalCone.xyz));
 
+    // スケールを考慮した半径を求める.
     float radius = cullData.BoundingSphere.w * scale;
 
     // 視錐台カリング.
-    if (IsCull(CbScene.Planes, float4(center.xyz, radius)))
+    if (IsCull(planes, float4(center.xyz, radius)))
     { return false; }
 
     // 縮退チェック.
@@ -112,17 +123,21 @@ void main(uint dispatchId : SV_DispatchThreadID)
     // メッシュレットカリング.
     if (dispatchId < CbMeshletInfo.MeshletCount)
     {
-        float3 cameraPos = CbScene.CameraPos;
-
     #ifdef DEBUG_CULLING
-        cameraPos = CbScene.DebugCameraPos;
-    #endif
-
         visible = IsVisible(
             CullInfos[dispatchId],
-            cameraPos,
+            CbScene.DebugCameraPos,
+            CbScene.DebugPlanes,
             CbMesh.World,
             CbMesh.Scale);
+    #else
+        visible = IsVisible(
+            CullInfos[dispatchId],
+            CbScene.CameraPos,
+            CbScene.Planes,
+            CbMesh.World,
+            CbMesh.Scale);
+    #endif
     }
 
     if (visible)
