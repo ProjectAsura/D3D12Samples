@@ -9,6 +9,9 @@
 //-----------------------------------------------------------------------------
 #include "Math.hlsli"
 
+// デバッグチェック用.
+#define DEBUG_CULLING   (1)
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // MeshParam structure
@@ -16,6 +19,8 @@
 struct MeshParam
 {
     float4x4    World;
+    float       Scale;
+    float3      Padding0;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -27,6 +32,7 @@ struct SceneParam
     float4x4    Proj;
     float4      Planes[6];
     float3      CameraPos;
+    float3      DebugCameraPos;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -39,42 +45,57 @@ struct CullInfo
 };
 
 ///////////////////////////////////////////////////////////////////////////////
+// MeshletInfo structure
+///////////////////////////////////////////////////////////////////////////////
+struct MeshletInfo
+{
+    uint   MeshletCount;
+};
+
+///////////////////////////////////////////////////////////////////////////////
 // PayloadParam structure
 ///////////////////////////////////////////////////////////////////////////////
 struct PayloadParam
 {
-    uint MeshletIndices[64];
+    uint MeshletIndices[32];
 };
 
 //-----------------------------------------------------------------------------
 // Resources.
 //-----------------------------------------------------------------------------
 groupshared PayloadParam   s_Payload;
-ConstantBuffer<SceneParam>  SceneBuffer : register(b0);
-ConstantBuffer<MeshParam>   MeshBuffer  : register(b1);
-StructuredBuffer<CullInfo>  CullBuffer  : register(t0);
+ConstantBuffer<SceneParam>  CbScene         : register(b0);
+ConstantBuffer<MeshParam>   CbMesh          : register(b1);
+ConstantBuffer<MeshletInfo> CbMeshletInfo   : register(b2);
+StructuredBuffer<CullInfo>  CullInfos       : register(t0);
 
 //-----------------------------------------------------------------------------
 //      可視性をチェックします.
 //-----------------------------------------------------------------------------
-bool IsVisible(CullInfo cullData)
+bool IsVisible(CullInfo cullData, float3 cameraPos, float4x4 world, float scale)
 {
+    // [-1, 1]に展開.
+    float4 normalCone = UnpackSnorm4(cullData.NormalCone);
+
+    // ワールド空間に変換.
+    float3 center = mul(world, float4(cullData.BoundingSphere.xyz, 1.0f)).xyz;
+    float3 axis = normalize(mul(world, float4(normalCone.xyz, 0.0f)).xyz);
+
+    float radius = cullData.BoundingSphere.w * scale;
+
     // 視錐台カリング.
-    if (IsCull(SceneBuffer.Planes, cullData.BoundingSphere))
+    if (IsCull(CbScene.Planes, float4(center.xyz, radius)))
     { return false; }
 
     // 縮退チェック.
     if (IsConeDegenerate(cullData.NormalCone))
     { return true; }
 
-    // ワールド空間に変換.
-    float3 center = mul(float4(cullData.BoundingSphere.xyz, 1.0f), MeshBuffer.World).xyz;
-
     // 視線ベクトルを求める.
-    float3 viewDir = normalize(SceneBuffer.CameraPos - center);
+    float3 viewDir = normalize(cameraPos - center);
 
     // 法錐カリング.
-    if (IsNormalConeCull(cullData.NormalCone, viewDir))
+    if (IsNormalConeCull(float4(axis, normalCone.w), viewDir))
     { return false; }
 
     return true;
@@ -83,13 +104,26 @@ bool IsVisible(CullInfo cullData)
 //-----------------------------------------------------------------------------
 //      メインエントリーポイントです.
 //-----------------------------------------------------------------------------
-[numthreads(64, 1, 1)]
+[numthreads(32, 1, 1)]
 void main(uint dispatchId : SV_DispatchThreadID)
 {
     bool visible = false;
 
     // メッシュレットカリング.
-    visible = IsVisible(CullBuffer[dispatchId]);
+    if (dispatchId < CbMeshletInfo.MeshletCount)
+    {
+        float3 cameraPos = CbScene.CameraPos;
+
+    #ifdef DEBUG_CULLING
+        cameraPos = CbScene.DebugCameraPos;
+    #endif
+
+        visible = IsVisible(
+            CullInfos[dispatchId],
+            cameraPos,
+            CbMesh.World,
+            CbMesh.Scale);
+    }
 
     if (visible)
     {

@@ -38,6 +38,8 @@ struct Meshlet
 struct MeshParam
 {
     float4x4 World;
+    float    Scale;
+    float3   Padding0;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -49,6 +51,9 @@ struct SceneParam
     float4x4    Proj;
     float4      Planes[6];
     float3      CameraPos;
+    float       Padding0;
+    float3      DebugCameraPos;
+    float       Padding1;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -56,7 +61,7 @@ struct SceneParam
 ///////////////////////////////////////////////////////////////////////////////
 struct PayloadParam
 {
-    uint MeshletIndices[64];
+    uint MeshletIndices[32];
 };
 
 //-----------------------------------------------------------------------------
@@ -68,8 +73,8 @@ StructuredBuffer<uint>      TexCoords       : register(t2);
 StructuredBuffer<uint>      Indices         : register(t3);
 StructuredBuffer<uint>      Primitives      : register(t4);
 StructuredBuffer<Meshlet>   Meshlets        : register(t5);
-ConstantBuffer<MeshParam>   CbMesh          : register(b0);
-ConstantBuffer<SceneParam>  CbScene         : register(b1);
+ConstantBuffer<SceneParam>  CbScene         : register(b0);
+ConstantBuffer<MeshParam>   CbMesh          : register(b1);
 
 //-----------------------------------------------------------------------------
 //      メインエントリーポイント.

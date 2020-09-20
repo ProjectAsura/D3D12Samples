@@ -57,7 +57,8 @@ private:
     asdx::PipelineState     m_PSO;
     asdx::ConstantBuffer    m_MeshBuffer;
     asdx::ConstantBuffer    m_SceneBuffer;
-    asdx::ConstantBuffer    m_LightingBuffer;
+    asdx::ConstantBuffer    m_DebugSceneBuffer;
+    bool                    m_DebugPause = false;
 
     //=========================================================================
     // private methods.
