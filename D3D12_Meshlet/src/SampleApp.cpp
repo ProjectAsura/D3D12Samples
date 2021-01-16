@@ -152,10 +152,10 @@ bool SampleApp::OnInit()
         desc.AS                             = { SampleAS, sizeof(SampleAS) };
         desc.MS                             = { SampleMS, sizeof(SampleMS) };
         desc.PS                             = { SamplePS, sizeof(SamplePS) };
-        desc.BlendState                     = asdx::PipelineState::GetBS(asdx::BLEND_STATE_OPAQUE);
+        desc.BlendState                     = asdx::GetBS(asdx::BLEND_STATE_OPAQUE);
         desc.SampleMask                     = UINT_MAX;
-        desc.RasterizerState                = asdx::PipelineState::GetRS(asdx::RASTERIZER_STATE_CULL_NONE);
-        desc.DepthStencilState              = asdx::PipelineState::GetDSS(asdx::DEPTH_STATE_DEFAULT);
+        desc.RasterizerState                = asdx::GetRS(asdx::RASTERIZER_STATE_CULL_NONE);
+        desc.DepthStencilState              = asdx::GetDSS(asdx::DEPTH_STATE_DEFAULT);
         desc.RTVFormats.NumRenderTargets    = 1;
         desc.RTVFormats.RTFormats[0]        = m_SwapChainFormat;
         desc.DSVFormat                      = DXGI_FORMAT_D32_FLOAT;
@@ -287,31 +287,29 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& param)
     pCmd->SetGraphicsRootSignature(m_RootSig.GetPtr());
     pCmd->SetPipelineState(m_PSO.GetPtr());
 
-    auto pCBV_Mesh          = m_MeshBuffer      .GetResource()->GetGPUVirtualAddress();
-    auto pCBV_Scene         = m_SceneBuffer     .GetResource()->GetGPUVirtualAddress();
-    asdx::SetCBV(pCmd, false, idxScene,    pCBV_Scene);
-    asdx::SetCBV(pCmd, false, idxMesh,     pCBV_Mesh);
+    asdx::SetCBV(pCmd, false, idxScene, m_SceneBuffer.GetView());
+    asdx::SetCBV(pCmd, false, idxMesh,  m_MeshBuffer .GetView());
     asdx::SetConstants(pCmd, false, idxLighting, 4, &lightingBuf, 0);
 
     for(auto i=0u; i<m_Model.GetMeshCount(); ++i)
     {
         auto& mesh = m_Model.GetMesh(i);
 
-        auto pSRV_Positions     = mesh.GetPositions    ().GetDescriptor();
-        auto pSRV_TangentSpaces = mesh.GetTangentSpaces().GetDescriptor();
-        auto pSRV_TexCoords     = mesh.GetTexCoords   (0).GetDescriptor();
-        auto pSRV_Inidices      = mesh.GetInindices    ().GetDescriptor();
-        auto pSRV_Primitives    = mesh.GetPrimitives   ().GetDescriptor();
-        auto pSRV_Meshlet       = mesh.GetMeshlets     ().GetDescriptor();
-        auto pSRV_CullInfos     = mesh.GetCullingInfos ().GetDescriptor();
+        auto pSRV_Positions     = mesh.GetPositions    ().GetView();
+        auto pSRV_TangentSpaces = mesh.GetTangentSpaces().GetView();
+        auto pSRV_TexCoords     = mesh.GetTexCoords   (0).GetView();
+        auto pSRV_Inidices      = mesh.GetInindices    ().GetView();
+        auto pSRV_Primitives    = mesh.GetPrimitives   ().GetView();
+        auto pSRV_Meshlet       = mesh.GetMeshlets     ().GetView();
+        auto pSRV_CullInfos     = mesh.GetCullingInfos ().GetView();
 
-        asdx::SetDescriptorTable(pCmd, false, idxPosition,       pSRV_Positions);
-        asdx::SetDescriptorTable(pCmd, false, idxTangentSpaces,  pSRV_TangentSpaces);
-        asdx::SetDescriptorTable(pCmd, false, idxTexCoord,       pSRV_TexCoords);
-        asdx::SetDescriptorTable(pCmd, false, idxIndices,        pSRV_Inidices);
-        asdx::SetDescriptorTable(pCmd, false, idxPrimitives,     pSRV_Primitives);
-        asdx::SetDescriptorTable(pCmd, false, idxMeshlets,       pSRV_Meshlet);
-        asdx::SetDescriptorTable(pCmd, false, idxCullInfo,       pSRV_CullInfos);
+        asdx::SetTable(pCmd, false, idxPosition,       pSRV_Positions);
+        asdx::SetTable(pCmd, false, idxTangentSpaces,  pSRV_TangentSpaces);
+        asdx::SetTable(pCmd, false, idxTexCoord,       pSRV_TexCoords);
+        asdx::SetTable(pCmd, false, idxIndices,        pSRV_Inidices);
+        asdx::SetTable(pCmd, false, idxPrimitives,     pSRV_Primitives);
+        asdx::SetTable(pCmd, false, idxMeshlets,       pSRV_Meshlet);
+        asdx::SetTable(pCmd, false, idxCullInfo,       pSRV_CullInfos);
 
         auto meshletCount = mesh.GetMeshletCount();
         asdx::SetConstant(pCmd, false, idxMeshletInfo, meshletCount, 0);

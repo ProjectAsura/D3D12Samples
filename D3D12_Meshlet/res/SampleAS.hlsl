@@ -95,7 +95,7 @@ bool IsVisible
     float radius = cullData.BoundingSphere.w * scale;
 
     // 視錐台カリング.
-    if (IsCull(planes, float4(center.xyz, radius)))
+    if (!Contains(planes, float4(center.xyz, radius)))
     { return false; }
 
     // 縮退チェック.
@@ -106,7 +106,7 @@ bool IsVisible
     float3 viewDir = normalize(cameraPos - center);
 
     // 法錐カリング.
-    if (IsNormalConeCull(float4(axis, normalCone.w), viewDir))
+    if (NormalConeCulling(float4(axis, normalCone.w), viewDir))
     { return false; }
 
     return true;
