@@ -217,114 +217,95 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& param)
     auto pCmd = m_GfxCmdList.Reset();
 
     asdx::GfxDevice().SetUploadCommand(pCmd);
-
-    asdx::BarrierTransition(
-        pCmd,
-        m_ColorTarget[idx].GetResource(),
-        0,
-        D3D12_RESOURCE_STATE_PRESENT,
-        D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-
     auto pRTV = m_ColorTarget[idx].GetRTV();
     auto pDSV = m_DepthTarget.GetDSV();
 
-    asdx::ClearRTV(pCmd, pRTV, m_ClearColor);
-    asdx::ClearDSV(pCmd, pDSV, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0);
+    // レンダーターゲットに書き込み.
+    {       
+        asdx::ScopedTransition barrier(pCmd, pRTV, asdx::STATE_PRESENT, asdx::STATE_RTV);
 
-    asdx::SetRenderTarget(pCmd, pRTV, pDSV);
-    asdx::SetViewport(pCmd, m_ColorTarget[idx].GetResource());
+        asdx::ClearRTV(pCmd, pRTV, m_ClearColor);
+        asdx::ClearDSV(pCmd, pDSV, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0);
 
-    // メッシュバッファ更新.
-    {
-        // メリタ製サイズに戻す.
-        auto scale = asdx::Vector3(1.0f, 4.0f / 3.0f, 1.0f);
+        asdx::SetRenderTarget(pCmd, pRTV, pDSV);
+        asdx::SetViewport(pCmd, pRTV);
 
-        auto ptr = m_MeshBuffer.MapAs<MeshParam>();
-        ptr->World = asdx::Matrix::CreateScale(scale);
-        ptr->Scale = asdx::Max(scale.x, asdx::Max(scale.y, scale.z));
-        m_MeshBuffer.Unmap();
-    }
-
-    // シーンバッファ更新.
-    {
-        auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
-            asdx::F_PIDIV4,
-            m_AspectRatio,
-            m_CameraController.GetNearClip(),
-            m_CameraController.GetFarClip());
-
-        auto ptr = m_SceneBuffer.MapAs<SceneParam>();
-        ptr->View = m_CameraController.GetView();
-        ptr->Proj = proj;
-        ptr->CameraPos = m_CameraController.GetPosition();
-        asdx::CalcFrustumPlanes(ptr->View, ptr->Proj, ptr->Planes);
-
-        if (!m_DebugPause)
+        // メッシュバッファ更新.
         {
-            ptr->DebugCamearPos = ptr->CameraPos;
-            for(auto i=0; i<6; ++i)
-            { ptr->DebugPlanes[i] = ptr->Planes[i]; }
+            // メリタ製サイズに戻す.
+            auto scale = asdx::Vector3(1.0f, 4.0f / 3.0f, 1.0f);
+
+            auto ptr = m_MeshBuffer.MapAs<MeshParam>();
+            ptr->World = asdx::Matrix::CreateScale(scale);
+            ptr->Scale = asdx::Max(scale.x, asdx::Max(scale.y, scale.z));
+            m_MeshBuffer.Unmap();
         }
 
-        m_SceneBuffer.Unmap();
+        // シーンバッファ更新.
+        {
+            auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
+                asdx::F_PIDIV4,
+                m_AspectRatio,
+                m_CameraController.GetNearClip(),
+                m_CameraController.GetFarClip());
+
+            auto ptr = m_SceneBuffer.MapAs<SceneParam>();
+            ptr->View = m_CameraController.GetView();
+            ptr->Proj = proj;
+            ptr->CameraPos = m_CameraController.GetPosition();
+            asdx::CalcFrustumPlanes(ptr->View, ptr->Proj, ptr->Planes);
+
+            if (!m_DebugPause)
+            {
+                ptr->DebugCamearPos = ptr->CameraPos;
+                for(auto i=0; i<6; ++i)
+                { ptr->DebugPlanes[i] = ptr->Planes[i]; }
+            }
+
+            m_SceneBuffer.Unmap();
+        }
+
+        asdx::Vector4 lightingBuf(0.0f, 1.0f, 0.0f, 1.0f);
+
+        auto idxPosition        = m_RootSig.Find("Positions");
+        auto idxTangentSpaces   = m_RootSig.Find("TangentSpaces");
+        auto idxTexCoord        = m_RootSig.Find("TexCoords");
+        auto idxIndices         = m_RootSig.Find("Indices");
+        auto idxPrimitives      = m_RootSig.Find("Primitives");
+        auto idxMeshlets        = m_RootSig.Find("Meshlets");
+        auto idxScene           = m_RootSig.Find("CbScene");
+        auto idxMesh            = m_RootSig.Find("CbMesh");
+        auto idxCullInfo        = m_RootSig.Find("CullInfos");
+        auto idxLighting        = m_RootSig.Find("CbLighting");
+        auto idxMeshletInfo     = m_RootSig.Find("CbMeshletInfo");
+
+        pCmd->SetGraphicsRootSignature(m_RootSig.GetPtr());
+        pCmd->SetPipelineState(m_PSO.GetPtr());
+
+        asdx::SetCBV(pCmd, idxScene, m_SceneBuffer.GetView());
+        asdx::SetCBV(pCmd, idxMesh,  m_MeshBuffer .GetView());
+        asdx::SetConstants(pCmd, idxLighting, 4, &lightingBuf, 0);
+
+        for(auto i=0u; i<m_Model.GetMeshCount(); ++i)
+        {
+            auto& mesh = m_Model.GetMesh(i);
+
+            asdx::SetTable(pCmd, idxPosition,       mesh.GetPositions    ().GetView());
+            asdx::SetTable(pCmd, idxTangentSpaces,  mesh.GetTangentSpaces().GetView());
+            asdx::SetTable(pCmd, idxTexCoord,       mesh.GetTexCoords   (0).GetView());
+            asdx::SetTable(pCmd, idxIndices,        mesh.GetInindices    ().GetView());
+            asdx::SetTable(pCmd, idxPrimitives,     mesh.GetPrimitives   ().GetView());
+            asdx::SetTable(pCmd, idxMeshlets,       mesh.GetMeshlets     ().GetView());
+            asdx::SetTable(pCmd, idxCullInfo,       mesh.GetCullingInfos ().GetView());
+
+            auto meshletCount = mesh.GetMeshletCount();
+            asdx::SetConstant(pCmd, idxMeshletInfo, meshletCount, 0);
+
+            auto dipatchCount = asdx::DivRoundUp(meshletCount, 32);
+
+            pCmd->DispatchMesh(dipatchCount, 1, 1);
+        }
     }
-
-    asdx::Vector4 lightingBuf(0.0f, 1.0f, 0.0f, 1.0f);
-
-    auto idxPosition        = m_RootSig.Find("Positions");
-    auto idxTangentSpaces   = m_RootSig.Find("TangentSpaces");
-    auto idxTexCoord        = m_RootSig.Find("TexCoords");
-    auto idxIndices         = m_RootSig.Find("Indices");
-    auto idxPrimitives      = m_RootSig.Find("Primitives");
-    auto idxMeshlets        = m_RootSig.Find("Meshlets");
-    auto idxScene           = m_RootSig.Find("CbScene");
-    auto idxMesh            = m_RootSig.Find("CbMesh");
-    auto idxCullInfo        = m_RootSig.Find("CullInfos");
-    auto idxLighting        = m_RootSig.Find("CbLighting");
-    auto idxMeshletInfo     = m_RootSig.Find("CbMeshletInfo");
-
-    pCmd->SetGraphicsRootSignature(m_RootSig.GetPtr());
-    pCmd->SetPipelineState(m_PSO.GetPtr());
-
-    asdx::SetCBV(pCmd, false, idxScene, m_SceneBuffer.GetView());
-    asdx::SetCBV(pCmd, false, idxMesh,  m_MeshBuffer .GetView());
-    asdx::SetConstants(pCmd, false, idxLighting, 4, &lightingBuf, 0);
-
-    for(auto i=0u; i<m_Model.GetMeshCount(); ++i)
-    {
-        auto& mesh = m_Model.GetMesh(i);
-
-        auto pSRV_Positions     = mesh.GetPositions    ().GetView();
-        auto pSRV_TangentSpaces = mesh.GetTangentSpaces().GetView();
-        auto pSRV_TexCoords     = mesh.GetTexCoords   (0).GetView();
-        auto pSRV_Inidices      = mesh.GetInindices    ().GetView();
-        auto pSRV_Primitives    = mesh.GetPrimitives   ().GetView();
-        auto pSRV_Meshlet       = mesh.GetMeshlets     ().GetView();
-        auto pSRV_CullInfos     = mesh.GetCullingInfos ().GetView();
-
-        asdx::SetTable(pCmd, false, idxPosition,       pSRV_Positions);
-        asdx::SetTable(pCmd, false, idxTangentSpaces,  pSRV_TangentSpaces);
-        asdx::SetTable(pCmd, false, idxTexCoord,       pSRV_TexCoords);
-        asdx::SetTable(pCmd, false, idxIndices,        pSRV_Inidices);
-        asdx::SetTable(pCmd, false, idxPrimitives,     pSRV_Primitives);
-        asdx::SetTable(pCmd, false, idxMeshlets,       pSRV_Meshlet);
-        asdx::SetTable(pCmd, false, idxCullInfo,       pSRV_CullInfos);
-
-        auto meshletCount = mesh.GetMeshletCount();
-        asdx::SetConstant(pCmd, false, idxMeshletInfo, meshletCount, 0);
-
-        auto dipatchCount = asdx::DivRoundUp(meshletCount, 32);
-
-        pCmd->DispatchMesh(dipatchCount, 1, 1);
-    }
-
-    asdx::BarrierTransition(
-        pCmd,
-        m_ColorTarget[idx].GetResource(),
-        0,
-        D3D12_RESOURCE_STATE_RENDER_TARGET,
-        D3D12_RESOURCE_STATE_PRESENT);
 
     pCmd->Close();
 
