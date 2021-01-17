@@ -165,7 +165,6 @@ bool SampleApp::OnInit()
         param[ROOT_PARAM_B0].Descriptor.RegisterSpace               = 0;
         param[ROOT_PARAM_B0].ShaderVisibility                       = D3D12_SHADER_VISIBILITY_ALL;
 
- 
         D3D12_STATIC_SAMPLER_DESC sampler = {};
         sampler.Filter              = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
         sampler.AddressU            = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -243,36 +242,45 @@ bool SampleApp::OnInit()
             { L"OnMiss",        nullptr, D3D12_EXPORT_FLAG_NONE },
         };
 
+        // グローバルルートシグニチャの設定.
         D3D12_GLOBAL_ROOT_SIGNATURE globalRootSig = {};
         globalRootSig.pGlobalRootSignature = m_GlobalRootSig.GetPtr();
         subObjects.Push(&globalRootSig);
 
+        // ローカルルートシグニチャの設定.
         D3D12_LOCAL_ROOT_SIGNATURE localRootSig = {};
         localRootSig.pLocalRootSignature = m_LocalRootSig.GetPtr();
         subObjects.Push(&localRootSig);
 
+        // DXILライブラリの設定.
         D3D12_DXIL_LIBRARY_DESC dxilLib = {};
         dxilLib.DXILLibrary = { SampleRayTracing, sizeof(SampleRayTracing) };
         dxilLib.NumExports  = _countof(exports);
         dxilLib.pExports    = exports;
         subObjects.Push(&dxilLib);
 
+        // ヒットグループの設定.
         D3D12_HIT_GROUP_DESC hitGroup = {};
         hitGroup.ClosestHitShaderImport = L"OnClosestHit";
         hitGroup.HitGroupExport         = L"MyHitGroup";
         hitGroup.Type                   = D3D12_HIT_GROUP_TYPE_TRIANGLES;
         subObjects.Push(&hitGroup);
 
+        // シェーダ設定.
         D3D12_RAYTRACING_SHADER_CONFIG shaderConfig = {};
         shaderConfig.MaxPayloadSizeInBytes   = sizeof(asdx::Vector4) + sizeof(asdx::Vector3);
         shaderConfig.MaxAttributeSizeInBytes = sizeof(asdx::Vector2);
         subObjects.Push(&shaderConfig);
 
+        // パイプライン設定.
         D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfig = {};
         pipelineConfig.MaxTraceRecursionDepth = 1;
         subObjects.Push(&pipelineConfig);
 
+        // ステート設定取得.
         auto desc = subObjects.GetDesc();
+
+        // ステートオブジェクトを生成.
         auto hr = pDevice->CreateStateObject(&desc, IID_PPV_ARGS(m_StateObject.GetAddress()));
         if (FAILED(hr))
         {
@@ -524,11 +532,13 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& args)
 
     // シーンバッファ更新.
     {
+        // ビュー行列.
         auto view = asdx::Matrix::CreateLookAt(
             asdx::Vector3(0.0f, 0.0f, -2.0f),
             asdx::Vector3(0.0f, 0.0f, 0.0f),
             asdx::Vector3(0.0f, 1.0f, 0.0f));
 
+        // 射影行列.
         auto proj = asdx::Matrix::CreatePerspectiveFieldOfView(
             asdx::ToRadian(37.5f),
             float(m_Width) / float(m_Height),
@@ -536,7 +546,7 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& args)
             1000.0f);
 
         SceneParam res = {};
-        res.InvView = asdx::Matrix::Invert(view);
+        res.InvView     = asdx::Matrix::Invert(view);
         res.InvViewProj = asdx::Matrix::Invert(proj) * res.InvView;
 
         m_SceneBuffer.SwapBuffer();
@@ -545,8 +555,13 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& args)
 
     // レイトレ実行.
     {
+        // グローバルルートシグニチャ設定.
         pCmd->SetComputeRootSignature(m_GlobalRootSig.GetPtr());
+
+        // ステートオブジェクト設定.
         pCmd->SetPipelineState1(m_StateObject.GetPtr());
+
+        // リソースをバインド.
         asdx::SetTable(pCmd, ROOT_PARAM_U0, m_Canvas      .GetUAV(), true);
         asdx::SetSRV  (pCmd, ROOT_PARAM_T0, m_TLAS   .GetResource(), true);
         asdx::SetTable(pCmd, ROOT_PARAM_T1, m_BackGround .GetView(), true);
@@ -564,6 +579,7 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& args)
 
         pCmd->DispatchRays(&desc);
 
+        // バリアを張っておく.
         asdx::BarrierUAV(pCmd, m_Canvas.GetResource());
     }
 
