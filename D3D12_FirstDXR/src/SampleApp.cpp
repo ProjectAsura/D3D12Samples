@@ -502,19 +502,21 @@ bool SampleApp::OnInit()
 //-----------------------------------------------------------------------------
 void SampleApp::OnTerm()
 {
-    m_Canvas        .Term();
-    m_VB            .Reset();
-    m_IB            .Reset();
     m_GlobalRootSig .Reset();
     m_LocalRootSig  .Reset();
     m_StateObject   .Reset();
+    m_VB            .Reset();
+    m_IB            .Reset();
+    m_TLAS          .Term();
+    m_BLAS          .Term();
+    m_Canvas        .Term();
+    m_BackGround    .Term();
     m_RayGenTable   .Term();
     m_MissTable     .Term();
     m_HitGroupTable .Term();
     m_SceneBuffer   .Term();
     m_VertexSRV     .Reset();
     m_IndexSRV      .Reset();
-    m_BackGround    .Term();
 }
 
 //-----------------------------------------------------------------------------
