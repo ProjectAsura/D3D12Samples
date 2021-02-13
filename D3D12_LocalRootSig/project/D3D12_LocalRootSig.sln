@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30907.101
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3D12_LocalRootSig", "D3D12_LocalRootSig.vcxproj", "{BFBCA0D7-6D57-4927-B0F9-66555EF683EF}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "asdx12", "..\..\external\asdx12\project\asdx12.vcxproj", "{ECD906D6-5DEB-4B5B-B919-05C147194C1D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BFBCA0D7-6D57-4927-B0F9-66555EF683EF}.Debug|x64.ActiveCfg = Debug|x64
+		{BFBCA0D7-6D57-4927-B0F9-66555EF683EF}.Debug|x64.Build.0 = Debug|x64
+		{BFBCA0D7-6D57-4927-B0F9-66555EF683EF}.Release|x64.ActiveCfg = Release|x64
+		{BFBCA0D7-6D57-4927-B0F9-66555EF683EF}.Release|x64.Build.0 = Release|x64
+		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Debug|x64.ActiveCfg = Debug|x64
+		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Debug|x64.Build.0 = Debug|x64
+		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Release|x64.ActiveCfg = Release|x64
+		{ECD906D6-5DEB-4B5B-B919-05C147194C1D}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6AD5F1A1-F557-47A5-9AE5-C3C9B499A4CC}
+	EndGlobalSection
+EndGlobal
