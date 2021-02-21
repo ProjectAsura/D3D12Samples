@@ -473,6 +473,9 @@ bool SampleApp::OnInit()
         }
 
         auto pCmd = commandList.Reset();
+
+        asdx::GfxDevice().SetUploadCommand(pCmd);
+
         m_BLAS.Build(pCmd);
         m_TLAS.Build(pCmd);
 

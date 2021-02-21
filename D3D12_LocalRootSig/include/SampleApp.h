@@ -12,6 +12,7 @@
 #include <asdxGraphicsDevice.h>
 #include <asdxTexture.h>
 #include <asdxConstantBuffer.h>
+#include <asdxRootSignature.h>
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -51,8 +52,8 @@ private:
     asdx::CommandQueue* m_pGraphicsQueue = nullptr;
     asdx::WaitPoint     m_FrameWaitPoint = {};
 
-    asdx::RefPtr<ID3D12RootSignature>       m_GlobalRootSig;
-    asdx::RefPtr<ID3D12RootSignature>       m_LocalRootSig;
+    asdx::RootSignature                     m_GlobalRootSig;
+    asdx::RootSignature                     m_LocalRootSig;
     asdx::RefPtr<ID3D12StateObject>         m_StateObject;
     asdx::RefPtr<ID3D12Resource>            m_VB;
     asdx::RefPtr<ID3D12Resource>            m_IB;
@@ -67,6 +68,7 @@ private:
     asdx::RefPtr<asdx::IShaderResourceView> m_VertexSRV;
     asdx::RefPtr<asdx::IShaderResourceView> m_IndexSRV;
     bool                                    m_ConstructAS = false;
+    asdx::Texture                           m_BaseColor[2];
 
     //=========================================================================
     // private methods.

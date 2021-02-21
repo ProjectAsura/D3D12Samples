@@ -181,6 +181,36 @@ bool SampleApp::OnInit()
         return false;
     }
 
+    {
+        asdx::CommandList commandList;
+        if (!commandList.Init(pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT))
+        {
+            ELOGA("Error : CommandList::Init() Failed.");
+            return false;
+        }
+
+        auto pCmd = commandList.Reset();
+
+        asdx::GfxDevice().SetUploadCommand(pCmd);
+
+        pCmd->Close();
+        ID3D12CommandList* pCmds[] = {
+            pCmd
+        };
+
+        // コマンドを実行.
+        m_pGraphicsQueue->Execute(1, pCmds);
+
+        // 待機点を発行.
+        m_FrameWaitPoint = m_pGraphicsQueue->Signal();
+
+        // 完了を待機.
+        m_pGraphicsQueue->Sync(m_FrameWaitPoint);
+
+        // コマンドリスト破棄.
+        commandList.Term();
+    }
+
     return true;
 }
 
