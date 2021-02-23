@@ -428,7 +428,11 @@ bool SampleApp::OnInit()
             asdx::ShaderRecord record;
             record.ShaderIdentifier = props->GetShaderIdentifier(L"OnGenerateRay");
 
-            if (!m_RayGenTable.Init(pDevice, 1, &record))
+            asdx::ShaderTable::Desc desc;
+            desc.RecordCount    = 1;
+            desc.pRecords       = &record;
+
+            if (!m_RayGenTable.Init(pDevice, &desc))
             {
                 ELOGA("Error : ShaderTable::Init() Failed.");
                 return false;
@@ -440,7 +444,11 @@ bool SampleApp::OnInit()
             asdx::ShaderRecord record;
             record.ShaderIdentifier = props->GetShaderIdentifier(L"OnMiss");
 
-            if (!m_MissTable.Init(pDevice, 1, &record))
+            asdx::ShaderTable::Desc desc;
+            desc.RecordCount    = 1;
+            desc.pRecords       = &record;
+
+            if (!m_MissTable.Init(pDevice, &desc))
             {
                 ELOGA("Error : ShaderTable::Init() Failed.");
                 return false;
@@ -468,7 +476,12 @@ bool SampleApp::OnInit()
             record[1].ShaderIdentifier   = props->GetShaderIdentifier(L"HitGroup2");
             record[1].LocalRootArguments = &param[1];
 
-            if (!m_HitGroupTable.Init(pDevice, _countof(record), record, sizeof(LocalParam)))
+            asdx::ShaderTable::Desc desc;
+            desc.RecordCount            = _countof(record);
+            desc.pRecords               = record;
+            desc.LocalRootArgumentSize  = sizeof(LocalParam);
+
+            if (!m_HitGroupTable.Init(pDevice, &desc))
             {
                 ELOGA("Error : ShaderTable::Init() Failed.");
                 return false;
