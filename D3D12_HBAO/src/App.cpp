@@ -12,20 +12,13 @@
 #include <App.h>
 #include <cstdio>
 #include <array>
-#include <MeshLoader.h>
+#include <fnd/asdxLogger.h>
+#include <fnd/asdxMath.h>
+#include <fnd/asdxMisc.h>
+#include <res/asdxResModel.h>
+#include <gfx/asdxCommandQueue.h>
+#include <gfx/asdxSampler.h>
 
-
-#ifndef DLOG
-#if defined(DEBUG) || defined(_DEBUG)
-#define DLOG(x, ...)    printf_s("[File: %s, Line:%d] "x"\n", __FILE__, __LINE__, ##__VA_ARGS__)
-#else
-#define DLOG(x, ...)    ((void)0)
-#endif
-#endif//DLOG
-
-#ifndef ELOG
-#define ELOG(x, ...)    fprintf_s(stderr, "[File:%s, Line:%d]"x"\n", __FILE__, __LINE__, ##__VA_ARGS__ )
-#endif//ELOG
 
 #ifndef ASDX_WND_CLASSNAME
 #define ASDX_WND_CLASSNAME      TEXT("asdxWindowClass")
@@ -39,6 +32,13 @@ namespace /* anonymous */ {
 //-------------------------------------------------------------------------------------------------
 App*    g_pApp = nullptr;
 
+#include "../res/shaders/Compiled/SimpleVS.inc"
+#include "../res/shaders/Compiled/SimplePS.inc"
+#include "../res/shaders/Compiled/FullScreenVS.inc"
+#include "../res/shaders/Compiled/HBAO_PS.inc"
+#include "../res/shaders/Compiled/CrossBilateralFilterPS.inc"
+#include "../res/shaders/Compiled/CopyPS.inc"
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // MeshVertex structure
@@ -51,6 +51,34 @@ struct MeshVertex
     asdx::Vector2   TexCoord;
 };
 
+///////////////////////////////////////////////////////////////////////////////
+// SceneParam structure
+///////////////////////////////////////////////////////////////////////////////
+struct SceneParam
+{
+    asdx::Matrix    View;
+    asdx::Matrix    Proj;
+    asdx::Matrix    InvView;
+    asdx::Matrix    InvProj;
+    float           NearClip;
+    float           FarClip;
+    float           FieldOfView;
+    float           AspectRatio;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// SsaoParam structure
+///////////////////////////////////////////////////////////////////////////////
+struct SsaoParam
+{
+    asdx::Vector2   InvSize;
+    float           RadiusScreenSpace;
+    float           InvRadius2;
+    float           Bias;
+    float           Intensity;
+    float           Reserved[2];
+};
+
 static const D3D12_INPUT_ELEMENT_DESC g_InputElements[] = {
     {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     {"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
@@ -58,6 +86,25 @@ static const D3D12_INPUT_ELEMENT_DESC g_InputElements[] = {
     {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 };
 
+template<typename T>
+void SafeRelease(T*& ptr)
+{
+    if (ptr != nullptr)
+    {
+        ptr->Release();
+        ptr = nullptr;
+    }
+}
+
+enum PARAM_INDEX
+{
+    PARAM_INDEX_B0,
+    PARAM_INDEX_B1,
+    PARAM_INDEX_B2,
+    PARAM_INDEX_B3,
+    PARAM_INDEX_T0,
+    PARAM_INDEX_T1,
+};
 
 } // namespace /* anonymous */
 
@@ -70,429 +117,272 @@ static const D3D12_INPUT_ELEMENT_DESC g_InputElements[] = {
 //      コンストラクタです.
 //-------------------------------------------------------------------------------------------------
 App::App()
-: m_hInst               ( nullptr )
-, m_hWnd                ( nullptr )
-, m_BufferCount         ( 2 )
-, m_SwapChainFormat     ( DXGI_FORMAT_R8G8B8A8_UNORM )
-, m_Viewport            ()
-, m_ColorTargetHandle   ()
-, m_EventHandle         ( nullptr )
-{ /* DO_NOTHING */ }
+: asdx::Application(L"HBAO", 960, 540, nullptr, nullptr, nullptr)
+{
+    m_SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+}
 
 //-------------------------------------------------------------------------------------------------
 //      デストラクタです.
 //-------------------------------------------------------------------------------------------------
 App::~App()
-{ TermApp(); }
-
-//-------------------------------------------------------------------------------------------------
-//      初期化処理です.
-//-------------------------------------------------------------------------------------------------
-bool App::InitApp()
-{
-    // COMライブラリの初期化.
-    HRESULT hr = CoInitialize( nullptr );
-    if ( FAILED( hr ) )
-    {
-        ELOG( "Error : Com Library Initialize Failed." );
-        return false;
-    }
-
-    // ウィンドウの初期化.
-    if ( !InitWnd() )
-    {
-        ELOG( "Error : InitWnd() Failed." );
-        return false;
-    }
-
-    // D3D12の初期化.
-    if ( !InitD3D() )
-    {
-        ELOG( "Error : InitD3D() Failed." );
-        return false;
-    }
-
-    // アプリケーション固有の初期化.
-    if ( !OnInit() )
-    {
-        ELOG( "Error : OnInit() Failed." );
-        return false;
-    }
-
-    // ポインタ設定.
-    g_pApp = this;
-
-    // 正常終了.
-    return true;
-}
-
-//-------------------------------------------------------------------------------------------------
-//      ウィンドウの初期化処理です.
-//-------------------------------------------------------------------------------------------------
-bool App::InitWnd()
-{
-    // インスタンスハンドルを取得.
-    HINSTANCE hInst = GetModuleHandle( nullptr );
-    if ( !hInst )
-    {
-        ELOG( "Error : GetModuleHandle() Failed." );
-        return false;
-    }
-
-    // 拡張ウィンドウクラスの設定.
-    WNDCLASSEXW wc;
-    wc.cbSize           = sizeof(WNDCLASSEXW);
-    wc.style            = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc      = MsgProc;
-    wc.cbClsExtra       = 0;
-    wc.cbWndExtra       = 0;
-    wc.hInstance        = hInst;
-    wc.hIcon            = LoadIcon( hInst, IDI_APPLICATION );
-    wc.hCursor          = LoadCursor( nullptr, IDC_ARROW );
-    wc.hbrBackground    = (HBRUSH)( COLOR_WINDOW + 1 );
-    wc.lpszMenuName     = nullptr;
-    wc.lpszClassName    = ASDX_WND_CLASSNAME;
-    wc.hIconSm          = LoadIcon( hInst, IDI_APPLICATION );
-
-    // 拡張ウィンドウクラスを登録.
-    if ( !RegisterClassExW( &wc ) )
-    {
-        ELOG( "Error : RegisterClassEx() Failed." );
-        return false;
-    }
-
-    // インスタンスハンドルを設定.
-    m_hInst = hInst;
-
-    RECT rc = { 0, 0, 960, 540 };
-
-    // ウィンドウの矩形を調整.
-    DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX;
-    AdjustWindowRect( &rc, style, FALSE );
-
-    // ウィンドウを生成.
-    m_hWnd = CreateWindowW(
-        ASDX_WND_CLASSNAME,
-        TEXT("D3D12 HABO"),
-        style,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        (rc.right - rc.left),
-        (rc.bottom - rc.top),
-        nullptr,
-        nullptr,
-        m_hInst,
-        nullptr );
-
-    // エラーチェック.
-    if ( !m_hWnd )
-    {
-        ELOG( "Error : CreateWindowW() Failed." );
-        return false;
-    }
-
-    // ウィンドウを表示
-    ShowWindow( m_hWnd, SW_SHOWNORMAL );
-    UpdateWindow( m_hWnd );
-
-    // フォーカス設定.
-    SetFocus( m_hWnd );
-
-    // 正常終了.
-    return true;
-}
-
-//-------------------------------------------------------------------------------------------------
-//      D3D12の初期化処理です.
-//-------------------------------------------------------------------------------------------------
-bool App::InitD3D()
-{
-    HRESULT hr = S_OK;
-
-    // ウィンドウ幅を取得.
-    RECT rc;
-    GetClientRect( m_hWnd, &rc );
-    uint32_t w = rc.right - rc.left;
-    uint32_t h = rc.bottom - rc.top;
-
-    UINT flags = 0;
-
-#if defined(DEBUG) || defined(_DEBUG)
-    ID3D12Debug* pDebug;
-    D3D12GetDebugInterface(IID_ID3D12Debug, (void**)&pDebug);
-    if (pDebug)
-    {
-        pDebug->EnableDebugLayer();
-        pDebug->Release();
-    }
-    flags |= DXGI_CREATE_FACTORY_DEBUG;
-#endif
-
-    hr = CreateDXGIFactory2(flags, IID_IDXGIFactory4, (void**)m_Factory.GetAddress());
-    if (FAILED(hr))
-    {
-        ELOG("Error : CreateDXGIFactory() Failed.");
-        return false;
-    }
-
-    hr = m_Factory->EnumAdapters(0, m_Adapter.GetAddress());
-    if (FAILED(hr))
-    {
-        ELOG("Error : IDXGIFactory::EnumAdapters() Failed.");
-        return false;
-    }
-
-    // デバイス生成.
-    hr = D3D12CreateDevice(
-        m_Adapter.GetPtr(),
-        D3D_FEATURE_LEVEL_11_0,
-        IID_ID3D12Device,
-        (void**)m_Device.GetAddress() );
-
-    // 生成チェック.
-    if ( FAILED( hr ) )
-    {
-        // Warpアダプターで再トライ.
-        m_Adapter.Reset();
-        m_Device.Reset();
-
-        hr = m_Factory->EnumWarpAdapter(IID_PPV_ARGS(m_Adapter.GetAddress()));
-        if (FAILED(hr))
-        {
-            ELOG("Error : IDXGIFactory::EnumWarpAdapter() Failed.");
-            return false;
-        }
-
-        // デバイス生成.
-        hr = D3D12CreateDevice(
-            m_Adapter.GetPtr(),
-            D3D_FEATURE_LEVEL_11_0,
-            IID_ID3D12Device,
-            (void**)m_Device.GetAddress());
-        if (FAILED(hr))
-        {
-            ELOG("Error: D3D12CreateDevice() Failed.");
-            return false;
-        }
-    }
-
-    // コマンドアロケータを生成.
-    hr = m_Device->CreateCommandAllocator(
-        D3D12_COMMAND_LIST_TYPE_DIRECT, 
-        IID_ID3D12CommandAllocator,
-        (void**)m_CmdAllocator.GetAddress() );
-    if ( FAILED( hr ) )
-    {
-        ELOG( "Error : ID3D12Device::CreateCommandAllocator() Failed." );
-        return false;
-    }
-
-    // コマンドキューを生成.
-    {
-       D3D12_COMMAND_QUEUE_DESC desc;
-       ZeroMemory( &desc, sizeof(desc) );
-       desc.Type        = D3D12_COMMAND_LIST_TYPE_DIRECT;
-       desc.Priority    = 0;
-       desc.Flags       = D3D12_COMMAND_QUEUE_FLAG_NONE;
-
-       hr = m_Device->CreateCommandQueue( &desc, IID_ID3D12CommandQueue, (void**)m_CmdQueue.GetAddress() );
-       if ( FAILED( hr ) )
-       {
-           ELOG( "Error : ID3D12Device::CreateCommandQueue() Failed." );
-           return false;
-       }
-    }
-
-    // スワップチェインを生成.
-    {
-        DXGI_SWAP_CHAIN_DESC desc;
-        ZeroMemory( &desc, sizeof(desc) );
-        desc.BufferCount                        = m_BufferCount;
-        desc.BufferDesc.Format                  = m_SwapChainFormat;
-        desc.BufferDesc.Width                   = w;
-        desc.BufferDesc.Height                  = h;
-        desc.BufferDesc.RefreshRate.Numerator   = 60;
-        desc.BufferDesc.RefreshRate.Denominator = 1;
-        desc.BufferUsage                        = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHADER_INPUT;
-        desc.OutputWindow                       = m_hWnd;
-        desc.SampleDesc.Count                   = 1;
-        desc.SampleDesc.Quality                 = 0;
-        desc.Windowed                           = TRUE;
-        desc.SwapEffect                         = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-        desc.Flags                              = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-
-        // アダプター単位の処理にマッチするのは m_Device ではなく m_CmdQueue　なので，m_CmdQueue　を第一引数として渡す.
-        hr = m_Factory->CreateSwapChain( m_CmdQueue.GetPtr(), &desc, m_SwapChain.GetAddress() );
-        if ( FAILED( hr ) )
-        {
-            ELOG( "Error : IDXGIFactory::CreateSwapChain() Failed." );
-            return false;
-        }
-    }
-
-    // デスクリプタヒープの生成.
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC desc;
-        ZeroMemory( &desc, sizeof(desc) );
-
-        desc.NumDescriptors = 1;
-        desc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-        desc.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-
-        hr = m_Device->CreateDescriptorHeap( &desc, IID_ID3D12DescriptorHeap, (void**)m_DescriptorHeap.GetAddress() );
-        if ( FAILED( hr ) )
-        {
-            ELOG( "Error : ID3D12Device::CreateDescriptorHeap() Failed." );
-            return false;
-        }
-    }
-
-    // コマンドリストの生成.
-    {
-        hr = m_Device->CreateCommandList(
-            1,
-            D3D12_COMMAND_LIST_TYPE_DIRECT,
-            m_CmdAllocator.GetPtr(),
-            nullptr,
-            IID_ID3D12GraphicsCommandList,
-            (void**)m_CmdList.GetAddress() );
-        if ( FAILED( hr ) )
-        {
-            ELOG( "Error : ID3D12Device::CreateCommandList() Failed." );
-            return false;
-        }
-    }
-
-    // バックバッファからレンダーターゲットを生成.
-    {
-        hr = m_SwapChain->GetBuffer( 0, IID_ID3D12Resource, (void**)m_ColorTarget.GetAddress() );
-        if ( FAILED( hr ) )
-        {
-            ELOG( "Error : IDXGISwapChain::GetBuffer() Failed." );
-            return false;
-        }
-
-        m_ColorTargetHandle = m_DescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-        m_Device->CreateRenderTargetView( m_ColorTarget.GetPtr(), nullptr, m_ColorTargetHandle );
-    }
-
-    // フェンスの生成.
-    {
-        m_EventHandle = CreateEvent( 0, FALSE, FALSE, 0 );
-
-        hr = m_Device->CreateFence( 0, D3D12_FENCE_FLAG_NONE, IID_ID3D12Fence, (void**)m_Fence.GetAddress() );
-        if ( FAILED( hr ) )
-        {
-            ELOG( "Error : ID3D12Device::CreateFence() Failed." );
-            return false;
-        }
-    }
-
-    // ビューポートの設定.
-    {
-        m_Viewport.TopLeftX = 0;
-        m_Viewport.TopLeftY = 0;
-        m_Viewport.Width    = FLOAT(w);
-        m_Viewport.Height   = FLOAT(h);
-        m_Viewport.MinDepth = 0.0f;
-        m_Viewport.MaxDepth = 1.0f;
-    }
-
-    // 正常終了.
-    return true;
-}
-
-//-------------------------------------------------------------------------------------------------
-//      終了処理です.
-//-------------------------------------------------------------------------------------------------
-void App::TermApp()
-{
-    // アプリケーション固有の終了処理.
-    OnTerm();
-
-    // D3D12の終了処理.
-    TermD3D();
-
-    // ウィンドウの終了処理.
-    TermWnd();
-
-    // COMライブラリの終了処理.
-    CoUninitialize();
-
-    // ポインタクリア.
-    g_pApp = nullptr;
-}
-
-//-------------------------------------------------------------------------------------------------
-//      ウィンドウの終了処理.
-//-------------------------------------------------------------------------------------------------
-void App::TermWnd()
-{
-    if ( m_hInst != nullptr )
-    { UnregisterClassW( ASDX_WND_CLASSNAME, m_hInst ); }
-
-    m_hInst = nullptr;
-    m_hWnd  = nullptr;
-}
-
-//-------------------------------------------------------------------------------------------------
-//      D3D12の終了処理.
-//-------------------------------------------------------------------------------------------------
-void App::TermD3D()
-{
-    CloseHandle( m_EventHandle );
-
-    m_EventHandle = nullptr;
-}
-
-//-------------------------------------------------------------------------------------------------
-//      メインループです.
-//-------------------------------------------------------------------------------------------------
-void App::MainLoop()
-{
-    MSG msg = { 0 };
-
-    while( WM_QUIT != msg.message )
-    {
-        auto gotMsg = PeekMessage( &msg, nullptr, 0, 0, PM_REMOVE );
-
-        if ( gotMsg )
-        {
-            TranslateMessage( &msg );
-            DispatchMessage( &msg );
-        }
-        else
-        {
-            OnFrameMove();
-            OnFrameRender();
-        }
-    }
-}
-
-//-------------------------------------------------------------------------------------------------
-//      アプリケーションを実行します.
-//-------------------------------------------------------------------------------------------------
-void App::Run()
-{
-    // 初期化に成功したらメインループに入る.
-    if ( InitApp() )
-    { MainLoop(); }
-
-    // 終了処理.
-    TermApp();
-}
+{ /* DO_NOTHING */ }
 
 //-------------------------------------------------------------------------------------------------
 //      アプリケーション固有の初期化処理です.
 //-------------------------------------------------------------------------------------------------
 bool App::OnInit()
 {
-    auto pDevice = m_Device.GetPtr();
+    auto pDevice = asdx::GetD3D12Device();
 
-    ResModel model;
+    // 法線バッファ.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_Width;
+        desc.Height             = m_Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R32G32_FLOAT;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+        if (!m_NormalTarget.Init(&desc, false))
+        {
+            ELOG("Error : ColorTarget::Init() Failed");
+            return false;
+        }
+    }
+
+    // AOバッファ.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_Width;
+        desc.Height             = m_Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R8_UNORM;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+        if (!m_AoTarget.Init(&desc, false))
+        {
+            ELOG("Error : ColorTarget::Init() Failed.");
+            return false;
+        }
+    }
+
+    // ピンポンバッファ.
+    {
+        asdx::TargetDesc desc;
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_Width;
+        desc.Height             = m_Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = 1;
+        desc.Format             = DXGI_FORMAT_R8_UNORM;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.InitState          = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+        if (!m_BlurTarget0.Init(&desc, false))
+        {
+            ELOG("Error : ColorTarget::Init() Failed.");
+            return false;
+        }
+
+        if (!m_BlurTarget1.Init(&desc, false))
+        {
+            ELOG("Error : ColorTarget::Init() Failed.");
+            return false;
+        }
+    }
+
+    // ルートシグニチャ.
+    {
+        D3D12_DESCRIPTOR_RANGE range[2] = {};
+        asdx::RangeSRV(range[0], 0);
+        asdx::RangeSRV(range[1], 1);
+
+        D3D12_ROOT_PARAMETER params[6] = {};
+        asdx::ParamCBV      (params[PARAM_INDEX_B0], D3D12_SHADER_VISIBILITY_VERTEX, 0);
+        asdx::ParamCBV      (params[PARAM_INDEX_B1], D3D12_SHADER_VISIBILITY_ALL,    1);
+        asdx::ParamCBV      (params[PARAM_INDEX_B2], D3D12_SHADER_VISIBILITY_PIXEL,  2);
+        asdx::ParamConstants(params[PARAM_INDEX_B3], D3D12_SHADER_VISIBILITY_PIXEL,  3, 3);
+        asdx::ParamTable    (params[PARAM_INDEX_T0], D3D12_SHADER_VISIBILITY_PIXEL,  1, &range[0]);
+        asdx::ParamTable    (params[PARAM_INDEX_T1], D3D12_SHADER_VISIBILITY_PIXEL,  1, &range[1]);
+
+        D3D12_STATIC_SAMPLER_DESC samplers[] = {
+            asdx::STATIC_SAMPLER_DESC(asdx::SAMPLER_POINT_CLAMP, D3D12_SHADER_VISIBILITY_PIXEL, 0),
+            asdx::STATIC_SAMPLER_DESC(asdx::SAMPLER_LINEAR_CLAMP, D3D12_SHADER_VISIBILITY_PIXEL, 1)
+        };
+
+        D3D12_ROOT_SIGNATURE_DESC desc = {};
+        desc.NumParameters      = _countof(params);
+        desc.pParameters        = params;
+        desc.NumStaticSamplers  = _countof(samplers);
+        desc.pStaticSamplers    = samplers;
+        desc.Flags              = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+        if (!m_RootSig.Init(pDevice, &desc))
+        {
+            ELOG("Error : RootSignature::Init() Failed");
+            return false;
+        }
+    }
+
+    {
+        struct Vertex {
+            asdx::Vector2 Position;
+            asdx::Vector2 TexCoord;
+        };
+
+        const Vertex vertices[] = {
+        { asdx::Vector2(-1.0f,  1.0f), asdx::Vector2(0.0f, 0.0f) },
+        { asdx::Vector2( 3.0f,  1.0f), asdx::Vector2(2.0f, 0.0f) },
+        { asdx::Vector2(-1.0f, -3.0f), asdx::Vector2(0.0f, 2.0f) },
+        };
+
+        if (!m_FullScreenVB.Init(sizeof(vertices), sizeof(Vertex)))
+        {
+            return false;
+        }
+
+        auto ptr = m_FullScreenVB.Map<Vertex>();
+        memcpy(ptr, vertices, sizeof(vertices));
+        m_FullScreenVB.Unmap();
+    }
+
+    D3D12_INPUT_ELEMENT_DESC elements[] = {
+       {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+       {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+    };
+
+
+    // メッシュ描画用PSO.
+    {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature         = m_RootSig.GetPtr();
+        desc.VS                     = { SimpleVS, sizeof(SimpleVS) };
+        desc.PS                     = { SimplePS, sizeof(SimplePS) };
+        desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_DEFAULT);
+        desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_BACK);
+        desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
+        desc.SampleMask             = D3D12_DEFAULT_SAMPLE_MASK;
+        desc.InputLayout            = { g_InputElements, _countof(g_InputElements) };
+        desc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        desc.NumRenderTargets       = 1;
+        desc.RTVFormats[0]          = DXGI_FORMAT_R32G32_FLOAT;
+        desc.DSVFormat              = DXGI_FORMAT_D32_FLOAT;
+        desc.SampleDesc.Count       = 1;
+        desc.SampleDesc.Quality     = 0;
+
+        if (!m_SimplePSO.Init(pDevice, &desc))
+        {
+            ELOG("Error : PipelineState::Init() Failed.");
+            return false;
+        }
+    }
+
+    // HBAO用PSO.
+    {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature         = m_RootSig.GetPtr();
+        desc.VS                     = { FullScreenVS, sizeof(FullScreenVS) };
+        desc.PS                     = { HBAO_PS, sizeof(HBAO_PS) };
+        desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_NONE);
+        desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_BACK);
+        desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
+        desc.SampleMask             = D3D12_DEFAULT_SAMPLE_MASK;
+        desc.InputLayout            = { elements, _countof(elements) };
+        desc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        desc.NumRenderTargets       = 1;
+        desc.RTVFormats[0]          = DXGI_FORMAT_R8_UNORM;
+        desc.DSVFormat              = DXGI_FORMAT_UNKNOWN;
+        desc.SampleDesc.Count       = 1;
+        desc.SampleDesc.Quality     = 0;
+
+        if (!m_SsaoPSO.Init(pDevice, &desc))
+        {
+            ELOG("Error : PipelineState::Init() Failed.");
+            return false;
+        }
+    }
+
+    // CrossBilateralFilter用PSO.
+    {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature         = m_RootSig.GetPtr();
+        desc.VS                     = { FullScreenVS, sizeof(FullScreenVS) };
+        desc.PS                     = { CrossBilateralFilterPS, sizeof(CrossBilateralFilterPS) };
+        desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_NONE);
+        desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_BACK);
+        desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
+        desc.SampleMask             = D3D12_DEFAULT_SAMPLE_MASK;
+        desc.InputLayout            = { elements, _countof(elements) };
+        desc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        desc.NumRenderTargets       = 1;
+        desc.RTVFormats[0]          = DXGI_FORMAT_R8_UNORM;
+        desc.DSVFormat              = DXGI_FORMAT_UNKNOWN;
+        desc.SampleDesc.Count       = 1;
+        desc.SampleDesc.Quality     = 0;
+
+        if (!m_BlurPSO.Init(pDevice, &desc))
+        {
+            ELOG("Error : PipelineState::Init() Failed.");
+            return false;
+        }
+    }
+
+    // コピー用PSO.
+    {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature         = m_RootSig.GetPtr();
+        desc.VS                     = { FullScreenVS, sizeof(FullScreenVS) };
+        desc.PS                     = { CopyPS, sizeof(CopyPS) };
+        desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_NONE);
+        desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_BACK);
+        desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
+        desc.SampleMask             = D3D12_DEFAULT_SAMPLE_MASK;
+        desc.InputLayout            = { elements, _countof(elements) };
+        desc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        desc.NumRenderTargets       = 1;
+        desc.RTVFormats[0]          = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.SampleDesc.Count       = 1;
+        desc.SampleDesc.Quality     = 0;
+
+        if (!m_CopyPSO.Init(pDevice, &desc))
+        {
+            ELOG("Error : PipelineState::Init() Failed.");
+            return false;
+        }
+    }
+
+    {
+        auto size = asdx::RoundUp(sizeof(SceneParam), 256);
+        if (!m_SceneParam.Init(size))
+        {
+            ELOG("Error : ConstantBuffer::Init() Failed.");
+            return false;
+        }
+    }
+
+    {
+        auto size = asdx::RoundUp(sizeof(SsaoParam), 256);
+        if (!m_SsaoParam.Init(size))
+        {
+            ELOG("Error : ConstantBuffer::Init() Failed.");
+            return false;
+        }
+    }
+
+    asdx::ResModel model;
     // モデル読み込み.
     {
-        MeshLoader loader;
+        asdx::MeshLoader loader;
         if (!loader.Load("../res/models/breakfast_room.obj", model))
         {
             ELOG("Error : Model Load Failed.");
@@ -503,8 +393,9 @@ bool App::OnInit()
     // モデルの初期化.
     {
         auto meshCount = model.Meshes.size();
-        m_VBs.resize(meshCount);
-        m_IBs.resize(meshCount);
+        m_Meshes.resize(meshCount);
+
+        auto matrix = asdx::Matrix::CreateIdentity();
 
         for(size_t i=0; i<meshCount; ++i)
         {
@@ -527,110 +418,65 @@ bool App::OnInit()
                     vertices[idx].TexCoord    = (hasTexCoord) ? mesh.TexCoords[0][idx] : asdx::Vector2(0.0f, 0.0f);
                 }
 
-                D3D12_RESOURCE_DESC desc = {};
-                desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
-                desc.Width              = sizeof(MeshVertex) * vertices.size();
-                desc.Height             = 1;
-                desc.DepthOrArraySize   = 1;
-                desc.MipLevels          = 1;
-                desc.Format             = DXGI_FORMAT_UNKNOWN;
-                desc.SampleDesc.Count   = 1;
-                desc.SampleDesc.Quality = 0;
-                desc.Layout             = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-                desc.Flags              = D3D12_RESOURCE_FLAG_NONE;
-
-                D3D12_HEAP_PROPERTIES props = {};
-                props.Type                  = D3D12_HEAP_TYPE_UPLOAD;
-                props.CPUPageProperty       = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-                props.MemoryPoolPreference  = D3D12_MEMORY_POOL_UNKNOWN;
-
-                auto hr = pDevice->CreateCommittedResource(
-                    &props,
-                    D3D12_HEAP_FLAG_NONE,
-                    &desc,
-                    D3D12_RESOURCE_STATE_GENERIC_READ,
-                    nullptr,
-                    IID_PPV_ARGS(m_VBs[i].GetAddress()));
-                if (FAILED(hr))
+                if (!m_Meshes[i].VB.Init(sizeof(MeshVertex) * vertices.size(), sizeof(MeshVertex)))
                 {
-                    ELOG("Error : ID3D12Device::CreateCommittedResource() Failed. errocode = 0x%x", hr);
                     return false;
                 }
 
-                uint8_t* ptr = nullptr;
-                hr = m_VBs[i]->Map(0, nullptr, reinterpret_cast<void**>(&ptr));
-                if (FAILED(hr))
+                uint8_t* ptr = m_Meshes[i].VB.Map<uint8_t>();
+                if (ptr == nullptr)
                 {
-                    ELOG("Error : ID3D12Resource::Map() Failed. errocode = 0x%x", hr);
+                    ELOG("Error : VertexBuffer::Map() Failed.");
                     return false;
                 }
 
                 memcpy(ptr, vertices.data(), sizeof(MeshVertex) * vertices.size());
 
-                m_VBs[i]->Unmap(0, nullptr);
+                m_Meshes[i].VB.Unmap();
             }
 
             // インデックスバッファを初期化.
             {
-                D3D12_RESOURCE_DESC desc = {};
-                desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
-                desc.Width              = sizeof(uint32_t) * mesh.Indices.size();
-                desc.Height             = 1;
-                desc.DepthOrArraySize   = 1;
-                desc.MipLevels          = 1;
-                desc.Format             = DXGI_FORMAT_UNKNOWN;
-                desc.SampleDesc.Count   = 1;
-                desc.SampleDesc.Quality = 0;
-                desc.Layout             = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-                desc.Flags              = D3D12_RESOURCE_FLAG_NONE;
-
-                D3D12_HEAP_PROPERTIES props = {};
-                props.Type                  = D3D12_HEAP_TYPE_UPLOAD;
-                props.CPUPageProperty       = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-                props.MemoryPoolPreference  = D3D12_MEMORY_POOL_UNKNOWN;
-
-                auto hr = pDevice->CreateCommittedResource(
-                    &props,
-                    D3D12_HEAP_FLAG_NONE,
-                    &desc,
-                    D3D12_RESOURCE_STATE_GENERIC_READ,
-                    nullptr,
-                    IID_PPV_ARGS(m_IBs[i].GetAddress()));
-                if (FAILED(hr))
+                if (!m_Meshes[i].IB.Init(sizeof(uint32_t) * mesh.Indices.size(), false))
                 {
-                    ELOG("Error : ID3D12Device::CreateCommittedResource() Failed. errocode = 0x%x", hr);
+                    ELOG("Error : IndexBuffer::Init() Failed.");
                     return false;
                 }
 
-                uint8_t* ptr = nullptr;
-                hr = m_IBs[i]->Map(0, nullptr, reinterpret_cast<void**>(&ptr));
-                if (FAILED(hr))
+                uint8_t* ptr = m_Meshes[i].IB.Map<uint8_t>();
+                if (ptr == nullptr)
                 {
-                    ELOG("Error : ID3D12Resource::Map() Failed. errcode = 0x%x", hr);
+                    ELOG("Error : IndexBuffer::Map() Failed.");
                     return false;
                 }
 
                 memcpy(ptr, mesh.Indices.data(), sizeof(uint32_t) * mesh.Indices.size());
 
-                m_IBs[i]->Unmap(0, nullptr);
+                m_Meshes[i].IB.Unmap();
             }
+
+            // 定数バッファを初期化.
+            {
+                auto size = asdx::RoundUp(sizeof(asdx::Matrix), 256);
+                if (!m_Meshes[i].CB.Init(size))
+                {
+                    ELOG("Error : ConstantBuffer::Init() Failed.");
+                    return false;
+                }
+
+                for(auto j=0; j<2; ++j)
+                {
+                    uint8_t* ptr = m_Meshes[i].CB.MapAs<uint8_t>(j);
+                    memcpy(ptr, &matrix, sizeof(matrix));
+                    m_Meshes[i].CB.Unmap(j);
+                }
+            }
+
+            m_Meshes[i].IndexCount = UINT(mesh.Indices.size());
         }
     }
     // モデルのメモリを解放.
     model.Dispose();
-
-    // メッシュ描画用PSO.
-    {
-    }
-
-    // HBAO用PSO.
-    {
-    }
-
-    // CrossBilateralFilter用PSO.
-    {
-    }
-
 
     return true;
 }
@@ -640,45 +486,280 @@ bool App::OnInit()
 //-------------------------------------------------------------------------------------------------
 void App::OnTerm()
 {
-    /* DO_NOTHING */
-
-    for(size_t i=0; i<m_VBs.size(); ++i)
-    {
-        m_VBs[i].Reset();
+    for(size_t i=0; i<m_Meshes.size(); ++i)
+    { 
+        m_Meshes[i].VB.Term();
+        m_Meshes[i].IB.Term();
+        m_Meshes[i].IndexCount = 0;
     }
 
-    for(size_t i=0; i<m_IBs.size(); ++i)
-    {
-        m_IBs[i].Reset();
-    }
+    m_Meshes.clear();
 
-    m_SimplePSO.Reset();
-    m_SSAOPSO.Reset();
-    m_BlurPSO.Reset();
+    m_SimplePSO.Term();
+    m_SsaoPSO.Term();
+    m_BlurPSO.Term();
+    m_CopyPSO.Term();
+    m_RootSig.Term();
+
+    m_NormalTarget.Term();
+    m_AoTarget.Term();
+    m_BlurTarget0.Term();
+    m_BlurTarget1.Term();
+    m_SceneParam.Term();
+    m_SsaoParam.Term();
+    m_FullScreenVB.Term();
 }
 
 //-------------------------------------------------------------------------------------------------
 //      フレーム遷移処理です.
 //-------------------------------------------------------------------------------------------------
-void App::OnFrameMove()
+void App::OnFrameMove(asdx::FrameEventArgs& param)
 {
-    /* DO_NOTHING */
+    m_SceneParam.SwapBuffer();
+    m_SsaoParam.SwapBuffer();
+
+    auto pos = asdx::Vector3(0.0f, 0.0f, -1.0f);
+    auto at  = asdx::Vector3(0.0f, 0.0f, 0.0f);
+    auto up  = asdx::Vector3(0.0f, 1.0f, 0.0f);
+
+    auto fov        = asdx::F_PIDIV4;
+    auto aspect     = float(m_Width) / float(m_Height);
+    auto nearClip   = 0.1f;
+    auto farClip    = 1000.0f;
+
+    // シーンパラメータ更新.
+    {
+        auto ptr = m_SceneParam.MapAs<SceneParam>();
+
+        ptr->View           = asdx::Matrix::CreateLookAt(pos, at, up);
+        ptr->Proj           = asdx::Matrix::CreatePerspectiveFieldOfView(fov, aspect, nearClip, farClip);
+        ptr->InvView        = asdx::Matrix::Invert(ptr->View);
+        ptr->InvProj        = asdx::Matrix::Invert(ptr->Proj);
+        ptr->NearClip       = nearClip;
+        ptr->FarClip        = farClip;
+        ptr->AspectRatio    = aspect;
+        ptr->FieldOfView    = fov;
+
+        m_SceneParam.Unmap();
+    }
+
+    // SSAOパラメータ更新.
+    {
+        float radius = 1.0f;
+        float tanHalfFovy = tan(fov * 0.5f);
+
+        auto ptr = m_SsaoParam.MapAs<SsaoParam>();
+
+        ptr->InvSize.x          = 1.0f / float(m_Width);
+        ptr->InvSize.y          = 1.0f / float(m_Height);
+        ptr->RadiusScreenSpace  = radius * 0.5f / tanHalfFovy * m_Height;
+        ptr->InvRadius2         = -1.0f / (radius * radius);
+        ptr->Bias               = 1e-4f;
+        ptr->Intensity          = 1.0f;
+
+        m_SsaoParam.Unmap();
+    }
 }
 
 //-------------------------------------------------------------------------------------------------
 //      フレーム描画処理です.
 //-------------------------------------------------------------------------------------------------
-void App::OnFrameRender()
+void App::OnFrameRender(asdx::FrameEventArgs& param)
 {
+    // コマンド記録開始.
+    m_GfxCmdList.Reset();
+
+    auto idx  = GetCurrentBackBufferIndex();
+    auto pCmd = m_GfxCmdList.GetCommandList();
+
     // ビューポートを設定.
-    m_CmdList->RSSetViewports( 1, &m_Viewport );
-    SetResourceBarrier( m_CmdList.GetPtr(), m_ColorTarget.GetPtr(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    pCmd->RSSetViewports(1, &m_Viewport);
+    pCmd->RSSetScissorRects(1, &m_ScissorRect);
 
-    // カラーバッファをクリア.
-    float clearColor[] = { 0.39f, 0.58f, 0.92f, 1.0f };
-    m_CmdList->ClearRenderTargetView( m_ColorTargetHandle, clearColor, 0, nullptr );
-    SetResourceBarrier( m_CmdList.GetPtr(), m_ColorTarget.GetPtr(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    // ルートシグニチャ設定.
+    pCmd->SetGraphicsRootSignature(m_RootSig.GetPtr());
 
+    pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    float clearColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+    // G-Buffer 生成.
+    {
+        asdx::ScopedBarrier barrier0(
+            pCmd, m_NormalTarget.GetResource(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+        // バッファをクリア.
+        m_GfxCmdList.ClearDSV(m_DepthTarget.GetDSV(), 1.0f);
+        m_GfxCmdList.ClearRTV(m_NormalTarget.GetRTV(), clearColor);
+
+        // レンダーターゲット設定.
+        m_GfxCmdList.SetTarget(m_NormalTarget.GetRTV(), m_DepthTarget.GetDSV());
+
+        // パイプラインステート設定.
+        m_GfxCmdList.SetPipelineState(m_SimplePSO.GetPtr());
+
+        // ディスクリプタ設定.
+        m_GfxCmdList.SetCBV(PARAM_INDEX_B1, m_SceneParam.GetView()); 
+
+        // メッシュを描画.
+        auto count = m_Meshes.size();
+        for(size_t i=0; i<count; ++i)
+        {
+            m_GfxCmdList.SetCBV(PARAM_INDEX_B0, m_Meshes[i].CB.GetView());
+
+            auto vbv = m_Meshes[i].VB.GetView();
+            auto ibv = m_Meshes[i].IB.GetView();
+            auto indexCount = m_Meshes[i].IndexCount;
+            m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
+            m_GfxCmdList.SetIndexBuffer(&ibv);
+
+            m_GfxCmdList.DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+        }
+    }
+
+    // HBAOを描画.
+    {
+        asdx::ScopedBarrier barrier0(
+            pCmd, m_DepthTarget.GetResource(),
+            D3D12_RESOURCE_STATE_DEPTH_WRITE,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+        asdx::ScopedBarrier barrier1(
+            pCmd, m_AoTarget.GetResource(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+        // バッファをクリア.
+        m_GfxCmdList.ClearRTV(m_AoTarget.GetRTV(), clearColor);
+
+        // レンダーターゲット設定.
+        m_GfxCmdList.SetTarget(m_AoTarget.GetRTV(), nullptr);
+
+        // パイプラインステート設定.
+        m_GfxCmdList.SetPipelineState(m_SsaoPSO.GetPtr());
+
+        auto vbv = m_FullScreenVB.GetView();
+        m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
+        m_GfxCmdList.SetIndexBuffer(nullptr);
+
+        // ディスクリプタ設定.
+        m_GfxCmdList.SetCBV(PARAM_INDEX_B1, m_SceneParam.GetView());
+        m_GfxCmdList.SetCBV(PARAM_INDEX_B2, m_SsaoParam.GetView());
+        m_GfxCmdList.SetTable(PARAM_INDEX_T0, m_DepthTarget.GetSRV());
+        m_GfxCmdList.SetTable(PARAM_INDEX_T1, m_NormalTarget.GetSRV());
+        
+        // 描画キック.
+        m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
+    }
+
+    auto blurSharpness = 1.0f;
+
+    //　水平ブラー.
+    {
+        asdx::ScopedBarrier barrier(
+            pCmd, m_BlurTarget0.GetResource(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+        // レンダーターゲット設定.
+        m_GfxCmdList.SetTarget(m_BlurTarget0.GetRTV(), nullptr);
+
+        // パイプラインステート設定.
+        m_GfxCmdList.SetPipelineState(m_BlurPSO.GetPtr());
+
+        auto vbv = m_FullScreenVB.GetView();
+        m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
+        m_GfxCmdList.SetIndexBuffer(nullptr);
+
+        // ディスクリプタ設定.
+        float param[3] = {
+            1.0f / float(m_Width),
+            0.0f,
+            blurSharpness,
+        };
+        m_GfxCmdList.SetConstants(PARAM_INDEX_B3, 3, param, 0);
+        m_GfxCmdList.SetTable(PARAM_INDEX_T0, m_DepthTarget.GetSRV());
+        m_GfxCmdList.SetTable(PARAM_INDEX_T1, m_AoTarget.GetSRV());
+
+        // 描画キック.
+        m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
+    }
+
+    //　垂直ブラー.
+    {
+        asdx::ScopedBarrier barrier(
+            pCmd, m_BlurTarget1.GetResource(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+        // レンダーターゲット設定.
+        m_GfxCmdList.SetTarget(m_BlurTarget1.GetRTV(), nullptr);
+
+        // パイプラインステート設定.
+        m_GfxCmdList.SetPipelineState(m_BlurPSO.GetPtr());
+
+        auto vbv = m_FullScreenVB.GetView();
+        m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
+        m_GfxCmdList.SetIndexBuffer(nullptr);
+
+        // ディスクリプタ設定.
+        float param[3] = {
+            0.0f,
+            1.0f / float(m_Height),
+            blurSharpness
+        };
+        m_GfxCmdList.SetConstants(PARAM_INDEX_B3, 3, param, 0);
+        m_GfxCmdList.SetTable(PARAM_INDEX_T0, m_DepthTarget.GetSRV());
+        m_GfxCmdList.SetTable(PARAM_INDEX_T1, m_BlurTarget0.GetSRV());
+
+        // 描画キック.
+        m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
+    }
+
+    // カラーバッファ.
+    {
+        asdx::ScopedBarrier barrier(
+            pCmd, m_ColorTarget[idx].GetResource(),
+            D3D12_RESOURCE_STATE_PRESENT,
+            D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+        // バッファをクリア.
+        m_GfxCmdList.ClearRTV(m_ColorTarget[idx].GetRTV(), clearColor);
+
+        m_GfxCmdList.SetTarget(m_ColorTarget[idx].GetRTV(), nullptr);
+
+        // パイプラインステート設定.
+        m_GfxCmdList.SetPipelineState(m_CopyPSO.GetPtr());
+        m_GfxCmdList.SetTable(PARAM_INDEX_T0, m_BlurTarget1.GetSRV());
+
+        auto vbv = m_FullScreenVB.GetView();
+        m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
+        m_GfxCmdList.SetIndexBuffer(nullptr);
+
+        // 描画キック.
+        m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
+    }
+
+    // コマンド記録終了.
+    m_GfxCmdList.Close();
+
+    auto pQueue = asdx::GetGraphicsQueue();
+
+    // 前フレームのコマンドが終了していなければ待機.
+    pQueue->Sync(m_WaitPoint);
+
+    ID3D12CommandList* pLists[] = {
+        pCmd
+    };
+
+    // コマンド実行.
+    pQueue->Execute(_countof(pLists), pLists);
+
+    // 待機点を記録.
+    m_WaitPoint = pQueue->Signal();
+    
     // 画面に表示.
     Present( 0 );
 }
@@ -686,107 +767,11 @@ void App::OnFrameRender()
 //-------------------------------------------------------------------------------------------------
 //      リサイズ時の処理です.
 //-------------------------------------------------------------------------------------------------
-void App::OnResize( uint32_t width, uint32_t height )
+void App::OnResize(const asdx::ResizeEventArgs& param)
 {
-    m_Viewport.Width  = FLOAT( width );
-    m_Viewport.Height = FLOAT( height );
-
-    // レンダーターゲットを破棄.
-    m_ColorTarget.Reset();
-    m_ColorTargetHandle.ptr = 0;
-
-    // バックバッファをリサイズ.
-    HRESULT hr = m_SwapChain->ResizeBuffers( m_BufferCount, 0, 0, m_SwapChainFormat, 0 );
-    if ( FAILED( hr ) )
-    { ELOG( "Error : IDXGISwapChain::ResizeBuffer() Failed." ); }
-
-    // バックバッファを取得.
-    hr = m_SwapChain->GetBuffer( 0, IID_ID3D12Resource, (void**)m_ColorTarget.GetAddress() );
-    if ( FAILED( hr ) )
-    { ELOG( "Error : IDXGISwapChain::GetBuffer() Failed." ); }
-
-    // レンダーターゲットを生成.
-    m_ColorTargetHandle = m_DescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-    m_Device->CreateRenderTargetView( m_ColorTarget.GetPtr(), nullptr, m_ColorTargetHandle );
+    m_NormalTarget.Resize(param.Width, param.Height);
+    m_AoTarget    .Resize(param.Width, param.Height);
+    m_BlurTarget0 .Resize(param.Width, param.Height);
+    m_BlurTarget1 .Resize(param.Width, param.Height);
 }
 
-//-------------------------------------------------------------------------------------------------
-//      リソースバリアの設定.
-//-------------------------------------------------------------------------------------------------
-void App::SetResourceBarrier
-(
-    ID3D12GraphicsCommandList* pCmdList,
-    ID3D12Resource* pResource,
-    D3D12_RESOURCE_STATES stateBefore,
-    D3D12_RESOURCE_STATES stateAfter
-)
-{
-    D3D12_RESOURCE_BARRIER desc = {};
-    desc.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    desc.Transition.pResource   = pResource;
-    desc.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    desc.Transition.StateBefore = stateBefore;
-    desc.Transition.StateAfter  = stateAfter;
-
-    pCmdList->ResourceBarrier( 1, &desc );
-}
-
-//-------------------------------------------------------------------------------------------------
-//      コマンドを実行して画面に表示します.
-//-------------------------------------------------------------------------------------------------
-void App::Present( uint32_t syncInterval )
-{
-    ID3D12CommandList* cmdList = m_CmdList.GetPtr();
-
-    // コマンドリストへの記録を終了し，コマンド実行.
-    m_CmdList->Close();
-    m_CmdQueue->ExecuteCommandLists( 1, &cmdList );
-
-    // コマンドの実行の終了を待機する
-    m_Fence->Signal( 0 );
-    m_Fence->SetEventOnCompletion( 1, m_EventHandle );
-    m_CmdQueue->Signal( m_Fence.GetPtr(), 1 );
-    WaitForSingleObject( m_EventHandle, INFINITE );
-
-    // 画面に表示する.
-    m_SwapChain->Present( syncInterval, 0 );
-
-    // コマンドリストとコマンドアロケータをリセットする.
-    m_CmdAllocator->Reset();
-    m_CmdList->Reset( m_CmdAllocator.GetPtr(), nullptr );
-}
-
-//-------------------------------------------------------------------------------------------------
-//      ウィンドウプロシージャです.
-//-------------------------------------------------------------------------------------------------
-LRESULT CALLBACK App::MsgProc( HWND hWnd, UINT uMsg, WPARAM wp, LPARAM lp )
-{
-    switch( uMsg )
-    {
-        case WM_PAINT:
-            {
-                PAINTSTRUCT ps;
-                HDC hdc = BeginPaint( hWnd, &ps );
-                EndPaint( hWnd, &ps );
-            }
-            break;
-
-        case WM_DESTROY:
-            {
-                PostQuitMessage( 0 );
-            }
-            break;
-
-        case WM_SIZE:
-            {
-                if ( g_pApp != nullptr )
-                {
-                    uint32_t w = LOWORD( lp );
-                    uint32_t h = HIWORD( lp );
-                    g_pApp->OnResize( w, h );
-                }
-            }
-    }
-
-    return DefWindowProc( hWnd, uMsg, wp, lp );
-}

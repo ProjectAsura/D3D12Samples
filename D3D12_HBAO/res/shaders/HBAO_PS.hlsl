@@ -67,8 +67,8 @@ SamplerState        LinearSampler   : register(s1);
 //-----------------------------------------------------------------------------
 // Constant Buffers.
 //-----------------------------------------------------------------------------
-ConstantBuffer<HBAOParam>  Param : register(b0);
 ConstantBuffer<SceneParam> Scene : register(b1);
+ConstantBuffer<HBAOParam>  Param : register(b2);
 
 //-----------------------------------------------------------------------------
 //      法線ベクトルをアンパッキングします.

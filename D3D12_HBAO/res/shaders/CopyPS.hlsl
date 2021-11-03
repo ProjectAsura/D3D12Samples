@@ -1,17 +1,8 @@
 //-----------------------------------------------------------------------------
-// File : FullScreenVS.hlsl
-// Desc : Vertex Shader For Post Process.
+// File : CopyPS.hlsl
+// Desc : Copy Shader.
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
-
-///////////////////////////////////////////////////////////////////////////////
-// VSInput structure
-///////////////////////////////////////////////////////////////////////////////
-struct VSInput
-{
-    float2 Position : POSITION;
-    float2 TexCoord : TEXCOORD0;
-};
 
 ///////////////////////////////////////////////////////////////////////////////
 // VSOutput structure
@@ -23,12 +14,16 @@ struct VSOutput
 };
 
 //-----------------------------------------------------------------------------
+// Textures and Samplers
+//-----------------------------------------------------------------------------
+Texture2D       InputMap        : register(t0);
+SamplerState    PointSampler    : register(s0);
+
+
+//-----------------------------------------------------------------------------
 //      メインエントリーポイントです.
 //-----------------------------------------------------------------------------
-VSOutput main(const VSInput input)
+float4 main(const VSOutput input) : SV_TARGET
 {
-    VSOutput output = (VSOutput)0;
-    output.Position = float4(input.Position, 0.0f, 1.0f);
-    output.TexCoord = input.TexCoord;
-    return output;
+    return InputMap.SampleLevel(PointSampler, input.TexCoord, 0.0f).xxxx;
 }
