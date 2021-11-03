@@ -194,8 +194,10 @@ private:
 
         if (srcMesh->HasNormals())
         { dstMesh.Normals.resize(vertexCount); }
+
         if (srcMesh->HasTangentsAndBitangents()) 
         { dstMesh.Tangents.resize(vertexCount); }
+
         if (srcMesh->HasVertexColors(0))
         { dstMesh.Colors.resize(vertexCount); }
 

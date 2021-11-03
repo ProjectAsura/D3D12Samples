@@ -40,6 +40,9 @@ namespace /* anonymous */ {
 App*    g_pApp = nullptr;
 
 
+///////////////////////////////////////////////////////////////////////////////
+// MeshVertex structure
+///////////////////////////////////////////////////////////////////////////////
 struct MeshVertex
 {
     asdx::Vector3   Position;
@@ -512,16 +515,20 @@ bool App::OnInit()
                 std::vector<MeshVertex> vertices;
                 vertices.resize(mesh.Positions.size());
 
+                auto hasTexCoord = (mesh.TexCoords[0].empty() == false);
+                auto hasTangent  = (mesh.Tangents.empty() == false);
+
                 auto vertexCount = mesh.Positions.size();
                 for(size_t idx=0; idx<vertexCount; ++idx)
                 {
-                    vertices[i].Position    = mesh.Positions[idx];
-                    vertices[i].Normal      = mesh.Normals[idx];
-                    vertices[i].Tangent     = mesh.Tangents[idx];
-                    vertices[i].TexCoord    = mesh.TexCoords[0][idx];
+                    vertices[idx].Position    = mesh.Positions[idx];
+                    vertices[idx].Normal      = mesh.Normals[idx];
+                    vertices[idx].Tangent     = (hasTangent) ? mesh.Tangents[idx] : asdx::Vector3(1.0f, 0.0f, 0.0f);
+                    vertices[idx].TexCoord    = (hasTexCoord) ? mesh.TexCoords[0][idx] : asdx::Vector2(0.0f, 0.0f);
                 }
 
                 D3D12_RESOURCE_DESC desc = {};
+                desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
                 desc.Width              = sizeof(MeshVertex) * vertices.size();
                 desc.Height             = 1;
                 desc.DepthOrArraySize   = 1;
@@ -533,7 +540,7 @@ bool App::OnInit()
                 desc.Flags              = D3D12_RESOURCE_FLAG_NONE;
 
                 D3D12_HEAP_PROPERTIES props = {};
-                props.Type                  = D3D12_HEAP_TYPE_DEFAULT;
+                props.Type                  = D3D12_HEAP_TYPE_UPLOAD;
                 props.CPUPageProperty       = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
                 props.MemoryPoolPreference  = D3D12_MEMORY_POOL_UNKNOWN;
 
@@ -541,7 +548,7 @@ bool App::OnInit()
                     &props,
                     D3D12_HEAP_FLAG_NONE,
                     &desc,
-                    D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+                    D3D12_RESOURCE_STATE_GENERIC_READ,
                     nullptr,
                     IID_PPV_ARGS(m_VBs[i].GetAddress()));
                 if (FAILED(hr))
@@ -566,18 +573,19 @@ bool App::OnInit()
             // インデックスバッファを初期化.
             {
                 D3D12_RESOURCE_DESC desc = {};
+                desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
                 desc.Width              = sizeof(uint32_t) * mesh.Indices.size();
                 desc.Height             = 1;
                 desc.DepthOrArraySize   = 1;
                 desc.MipLevels          = 1;
-                desc.Format             = DXGI_FORMAT_R32_UINT;
+                desc.Format             = DXGI_FORMAT_UNKNOWN;
                 desc.SampleDesc.Count   = 1;
                 desc.SampleDesc.Quality = 0;
                 desc.Layout             = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
                 desc.Flags              = D3D12_RESOURCE_FLAG_NONE;
 
                 D3D12_HEAP_PROPERTIES props = {};
-                props.Type                  = D3D12_HEAP_TYPE_DEFAULT;
+                props.Type                  = D3D12_HEAP_TYPE_UPLOAD;
                 props.CPUPageProperty       = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
                 props.MemoryPoolPreference  = D3D12_MEMORY_POOL_UNKNOWN;
 
@@ -585,7 +593,7 @@ bool App::OnInit()
                     &props,
                     D3D12_HEAP_FLAG_NONE,
                     &desc,
-                    D3D12_RESOURCE_STATE_INDEX_BUFFER,
+                    D3D12_RESOURCE_STATE_GENERIC_READ,
                     nullptr,
                     IID_PPV_ARGS(m_IBs[i].GetAddress()));
                 if (FAILED(hr))

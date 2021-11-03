@@ -13,15 +13,19 @@
 #define STEP_COUNT  (8)    // 1方向あたりのレイマーチ数.
 #endif//STEP_COUNT
 
+
 ///////////////////////////////////////////////////////////////////////////////
 // VSOutput structure
 ///////////////////////////////////////////////////////////////////////////////
 struct VSOutput
 {
-    float4 Position;
-    float2 TexCoord;
+    float4 Position : SV_POSITION;
+    float2 TexCoord : TEXCOORD0;
 };
 
+///////////////////////////////////////////////////////////////////////////////
+// HBAOParam structure
+///////////////////////////////////////////////////////////////////////////////
 struct HBAOParam
 {
     float2  InvSize;    // レンダーターゲットサイズの逆数.
@@ -32,6 +36,9 @@ struct HBAOParam
     float2  Reserved;
 };
 
+///////////////////////////////////////////////////////////////////////////////
+// SceneParam structure
+///////////////////////////////////////////////////////////////////////////////
 struct SceneParam
 {
     float4x4 View;
@@ -44,14 +51,24 @@ struct SceneParam
     float    AspectRatio;
 };
 
+//-----------------------------------------------------------------------------
+// Constant Values.
+//-----------------------------------------------------------------------------
+static const float PI = 3.1415926535897932384626433832795f;
 
+//-----------------------------------------------------------------------------
+// Textures and Samplers
+//-----------------------------------------------------------------------------
 Texture2D<float>    DepthMap        : register(t0);
 Texture2D<float2>   NormalMap       : register(t1);
 SamplerState        PointSampler    : register(s0);
 SamplerState        LinearSampler   : register(s1);
 
-ConstantBuffer<HBAOParam> Param : register(b0);
-ConstantBuffer<Transform> Scene : register(b1);
+//-----------------------------------------------------------------------------
+// Constant Buffers.
+//-----------------------------------------------------------------------------
+ConstantBuffer<HBAOParam>  Param : register(b0);
+ConstantBuffer<SceneParam> Scene : register(b1);
 
 //-----------------------------------------------------------------------------
 //      法線ベクトルをアンパッキングします.
@@ -108,7 +125,7 @@ float2 Rotate(float2 dir, float2 cos_sin)
 //-----------------------------------------------------------------------------
 //      エントリーポイントです.
 //-----------------------------------------------------------------------------
-float main(const VSOutput input)
+float main(const VSOutput input) : SV_TARGET0
 {
     float2 uv = input.TexCoord;
 
@@ -116,7 +133,7 @@ float main(const VSOutput input)
     float3 p0 = ToViewPos(uv);
 
     // ピクセル半径.
-    float radiusPixels = abs(Param.RadiusSS / p.z);
+    float radiusPixels = abs(Param.RadiusSS / p0.z);
 
     // 1 ピクセル未満の場合は処理しない.
     if (radiusPixels < 1.0f)
@@ -129,7 +146,7 @@ float main(const VSOutput input)
     n0 = mul((float3x3)Scene.View, n0);
     n0 = normalize(n0);
 
-    int2  ssP = input.position.xy;
+    int2  ssP = input.Position.xy;
         
     // ハッシュ関数により回転角を求める.
     // HPG12 "Scalable Ambinent Obscurance" (Equation.8) 参照. 
@@ -177,7 +194,7 @@ float main(const VSOutput input)
             occlusion += EvalAO(p0, p, n0);
 
             // レイを進める.
-            ray += step_size;
+            ray += StepSize;
         }
     }
 

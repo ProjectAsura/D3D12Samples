@@ -37,9 +37,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
     <FxCompile Include="..\res\shaders\SimpleVS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
@@ -55,5 +52,8 @@
     <FxCompile Include="..\res\shaders\CrossBilateralFilterPS.hlsl">
       <Filter>リソース ファイル</Filter>
     </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

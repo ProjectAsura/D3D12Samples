@@ -9,10 +9,13 @@
 ///////////////////////////////////////////////////////////////////////////////
 struct VSOutput
 {
-    float4 Position;
-    float2 TexCoord;
+    float4 Position : SV_POSITION;
+    float2 TexCoord : TEXCOORD0;
 };
 
+//-----------------------------------------------------------------------------
+// Constant Values.
+//-----------------------------------------------------------------------------
 static const VSOutput vertices[] = {
     { float4(-1.0f,  1.0f, 0.0f, 1.0f), float2(0.0f, 0.0f) },
     { float4( 3.0f,  1.0f, 0.0f, 1.0f), float2(2.0f, 0.0f) },
@@ -22,7 +25,7 @@ static const VSOutput vertices[] = {
 //-----------------------------------------------------------------------------
 //      メインエントリーポイントです.
 //-----------------------------------------------------------------------------
-VSOutput main( uint vertexId : SV_VertexId )
+VSOutput main(uint vertexId : SV_VertexID)
 {
     return vertices[vertexId];
 }
