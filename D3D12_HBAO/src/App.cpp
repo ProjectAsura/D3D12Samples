@@ -489,8 +489,15 @@ bool App::OnInit()
 
     m_GfxCmdList.Reset();
 
-    if (!asdx::GuiMgr::Instance().Init(m_GfxCmdList, m_hWnd, m_Width, m_Height, DXGI_FORMAT_R8G8B8A8_UNORM, nullptr))
+    if (!asdx::GuiMgr::Instance().Init(
+        m_GfxCmdList,
+        m_hWnd,
+        m_Width,
+        m_Height,
+        m_SwapChainFormat,
+        "../res/fonts/07やさしさゴシック.ttf"))
     {
+        ELOG("Error : GuiMgr::Init() Failed.");
         return false;
     }
 
@@ -768,11 +775,11 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
 
         asdx::GuiMgr::Instance().Update(m_Width, m_Height);
         ImGui::SetNextWindowSize(ImVec2(240, 100), ImGuiCond_Once);
-        if (ImGui::Begin(u8"SSAO Parameter"))
+        if (ImGui::Begin(u8"SSAO パラメータ"))
         {
-            ImGui::DragFloat(u8"Radius", &m_Radius, 0.1f, 0.0f, 1000.0f, "%.2f");
-            ImGui::DragFloat(u8"Intensity", &m_Intensity, 0.1f, 0.0f, 1000.0f, "%.2f");
-            ImGui::DragFloat(u8"Bias", &m_Bias, 0.01f, -1000.0f, 1000.0f, "%.2f");
+            ImGui::DragFloat(u8"半径", &m_Radius, 0.1f, 0.0f, 1000.0f, "%.2f");
+            ImGui::DragFloat(u8"強度", &m_Intensity, 0.1f, 0.0f, 1000.0f, "%.2f");
+            ImGui::DragFloat(u8"バイアス", &m_Bias, 0.01f, -1000.0f, 1000.0f, "%.2f");
             ImGui::End();
         }
         asdx::GuiMgr::Instance().Draw(pCmd);

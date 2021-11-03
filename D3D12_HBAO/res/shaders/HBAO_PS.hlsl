@@ -128,13 +128,13 @@ float2 Rotate(float2 dir, float2 cos_sin)
 //-----------------------------------------------------------------------------
 //      乱数を求めます.
 //-----------------------------------------------------------------------------
-float4 R3Sequence(int2 ssP)
+float4 R1Sequence(int2 ssP)
 {
-    int n = ssP.x ^ ssP.y; // 超適当.
+    int n = ssP.x ^ ssP.y; // 結果が良くなるように, すっごく適当に決めた.
 
-    // "The Unreasonable Effectiveness of Quasirandom Sequence",
+    // 参考, "The Unreasonable Effectiveness of Quasirandom Sequence",
     // http://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
-    const float g = 1.6180339887498948482; // 黄金比を使った方が綺麗に出たので...
+    const float g = 1.6180339887498948482; // 黄金比を使った方が良い結果になったので...
     const float g2 = g * g;
     const float a1 = 1.0f / g;
     const float a2 = 1.0f / g2;
@@ -171,7 +171,7 @@ float main(const VSOutput input) : SV_TARGET0
     n0 = normalize(n0);
 
     // 乱数.
-    float4 rand = R3Sequence(input.Position.xy);
+    float4 rand = R1Sequence(input.Position.xy);
 
     // レイマーチのステップサイズ.
     const float StepSize = radiusPixels / (STEP_COUNT + 1);
