@@ -18,6 +18,7 @@
 #include <res/asdxResModel.h>
 #include <gfx/asdxCommandQueue.h>
 #include <gfx/asdxSampler.h>
+#include <fw/asdxCameraController.h>
 
 
 #ifndef ASDX_WND_CLASSNAME
@@ -117,7 +118,7 @@ enum PARAM_INDEX
 //      コンストラクタです.
 //-------------------------------------------------------------------------------------------------
 App::App()
-: asdx::Application(L"HBAO", 960, 540, nullptr, nullptr, nullptr)
+: asdx::Application(L"HBAO", 1920, 1080, nullptr, nullptr, nullptr)
 {
     m_SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 }
@@ -478,6 +479,11 @@ bool App::OnInit()
     // モデルのメモリを解放.
     model.Dispose();
 
+    auto pos = asdx::Vector3(2.0f, 1.5f, -2.0f);
+    auto at  = asdx::Vector3(0.0f, 1.5f, 0.0f);
+    auto up  = asdx::Vector3(0.0f, 1.0f, 0.0f);
+    m_CameraController.Init(pos, at, up, 0.1f, 1000.0f);
+
     return true;
 }
 
@@ -518,20 +524,16 @@ void App::OnFrameMove(asdx::FrameEventArgs& param)
     m_SceneParam.SwapBuffer();
     m_SsaoParam.SwapBuffer();
 
-    auto pos = asdx::Vector3(0.0f, 0.0f, -1.0f);
-    auto at  = asdx::Vector3(0.0f, 0.0f, 0.0f);
-    auto up  = asdx::Vector3(0.0f, 1.0f, 0.0f);
-
     auto fov        = asdx::F_PIDIV4;
     auto aspect     = float(m_Width) / float(m_Height);
-    auto nearClip   = 0.1f;
-    auto farClip    = 1000.0f;
+    auto nearClip   = m_CameraController.GetNearClip();
+    auto farClip    = m_CameraController.GetFarClip();
 
     // シーンパラメータ更新.
     {
         auto ptr = m_SceneParam.MapAs<SceneParam>();
 
-        ptr->View           = asdx::Matrix::CreateLookAt(pos, at, up);
+        ptr->View           = m_CameraController.GetView();
         ptr->Proj           = asdx::Matrix::CreatePerspectiveFieldOfView(fov, aspect, nearClip, farClip);
         ptr->InvView        = asdx::Matrix::Invert(ptr->View);
         ptr->InvProj        = asdx::Matrix::Invert(ptr->Proj);
@@ -545,7 +547,7 @@ void App::OnFrameMove(asdx::FrameEventArgs& param)
 
     // SSAOパラメータ更新.
     {
-        float radius = 1.0f;
+        float radius = 0.5f;
         float tanHalfFovy = tan(fov * 0.5f);
 
         auto ptr = m_SsaoParam.MapAs<SsaoParam>();
@@ -654,7 +656,7 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
         m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
     }
 
-    auto blurSharpness = 1.0f;
+    auto blurSharpness = 1.0f / m_CameraController.GetFarClip();
 
     //　水平ブラー.
     {
@@ -775,3 +777,20 @@ void App::OnResize(const asdx::ResizeEventArgs& param)
     m_BlurTarget1 .Resize(param.Width, param.Height);
 }
 
+void App::OnMouse(const asdx::MouseEventArgs& param)
+{
+    m_CameraController.OnMouse(
+        param.X,
+        param.Y,
+        param.WheelDelta,
+        param.IsLeftButtonDown,
+        param.IsRightButtonDown,
+        param.IsMiddleButtonDown,
+        param.IsSideButton1Down,
+        param.IsSideButton2Down);
+}
+
+void App::OnKey(const asdx::KeyEventArgs& param)
+{
+    m_CameraController.OnKey(param.KeyCode, param.IsKeyDown, param.IsAltDown);
+}

@@ -10,6 +10,7 @@
 // Includes
 //-------------------------------------------------------------------------------------------------
 #include <fw/asdxApp.h>
+#include <fw/asdxCameraController.h>
 #include <gfx/asdxTexture.h>
 #include <gfx/asdxVertexBuffer.h>
 #include <gfx/asdxIndexBuffer.h>
@@ -53,7 +54,8 @@ protected:
     void OnFrameMove    (asdx::FrameEventArgs& param) override;
     void OnFrameRender  (asdx::FrameEventArgs& param) override;
     void OnResize       (const asdx::ResizeEventArgs& param) override;
-
+    void OnMouse        (const asdx::MouseEventArgs& param) override;
+    void OnKey          (const asdx::KeyEventArgs& param) override;
 
 private:
     //=============================================================================================
@@ -81,6 +83,7 @@ private:
     asdx::ConstantBuffer    m_SceneParam;
     asdx::ConstantBuffer    m_SsaoParam;
     asdx::VertexBuffer      m_FullScreenVB;
+    asdx::CameraController  m_CameraController;
 
     //=============================================================================================
     // private methods.
