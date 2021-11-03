@@ -4,7 +4,7 @@
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
 
-#define KARNEL_RADIUS   (7)
+#define KARNEL_RADIUS   (5)
 
 ///////////////////////////////////////////////////////////////////////////////
 // VSOutput structure
@@ -67,7 +67,8 @@ float main(const VSOutput input) : SV_TARGET0
     //　プラス方向.
     //=================
     // Inner half of the kernel: step size = 1 and POINT filtering
-    for(r = 1.0f; r<=KARNEL_RADIUS/2; r+=1)
+    r = 1.0f;
+    for(; r<=KARNEL_RADIUS/2; r+=1)
     {
         float2 uv = uv0 + r * Param.SampleDir;
         float ao = AoMap.Sample(PointSampler, uv);
@@ -95,7 +96,8 @@ float main(const VSOutput input) : SV_TARGET0
     //　マイナス方向.
     //=================
     // Inner half of the kernel: step size = 1 and POINT filtering
-    for(r = 1.0f; r<=KARNEL_RADIUS/2; r+=1)
+    r = 1.0f;
+    for(; r<=KARNEL_RADIUS/2; r+=1)
     {
         float2 uv = uv0 - r * Param.SampleDir;
         float ao = AoMap.Sample(PointSampler, uv);
@@ -119,5 +121,5 @@ float main(const VSOutput input) : SV_TARGET0
         totalW  += w;
     }
 
-    return totalAO / totalW;
+    return saturate(totalAO / totalW);
 }

@@ -19,7 +19,8 @@
 #include <gfx/asdxCommandQueue.h>
 #include <gfx/asdxSampler.h>
 #include <fw/asdxCameraController.h>
-
+#include <edit/asdxGuiMgr.h>
+#include "../external/imgui/imgui.h"
 
 #ifndef ASDX_WND_CLASSNAME
 #define ASDX_WND_CLASSNAME      TEXT("asdxWindowClass")
@@ -121,6 +122,7 @@ App::App()
 : asdx::Application(L"HBAO", 1920, 1080, nullptr, nullptr, nullptr)
 {
     m_SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    m_ClearDepth = 0.0f;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -269,8 +271,8 @@ bool App::OnInit()
         desc.pRootSignature         = m_RootSig.GetPtr();
         desc.VS                     = { SimpleVS, sizeof(SimpleVS) };
         desc.PS                     = { SimplePS, sizeof(SimplePS) };
-        desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_DEFAULT);
-        desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_BACK);
+        desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_DEFAULT, D3D12_COMPARISON_FUNC_GREATER);
+        desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_NONE);
         desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
         desc.SampleMask             = D3D12_DEFAULT_SAMPLE_MASK;
         desc.InputLayout            = { g_InputElements, _countof(g_InputElements) };
@@ -384,7 +386,7 @@ bool App::OnInit()
     // モデル読み込み.
     {
         asdx::MeshLoader loader;
-        if (!loader.Load("../res/models/breakfast_room.obj", model))
+        if (!loader.Load("../res/models/sponza.obj", model))
         {
             ELOG("Error : Model Load Failed.");
             return false;
@@ -479,10 +481,29 @@ bool App::OnInit()
     // モデルのメモリを解放.
     model.Dispose();
 
-    auto pos = asdx::Vector3(2.0f, 1.5f, -2.0f);
-    auto at  = asdx::Vector3(0.0f, 1.5f, 0.0f);
+    auto pos = asdx::Vector3(1000.0f, 100.0f, 0.0f);
+    auto at  = asdx::Vector3(0.0f, 100.0f, 0.0f);
     auto up  = asdx::Vector3(0.0f, 1.0f, 0.0f);
-    m_CameraController.Init(pos, at, up, 0.1f, 1000.0f);
+    m_CameraController.Init(pos, at, up, 0.1f, 10000.0f);
+    m_CameraController.SetMoveGain(0.1f);
+
+    m_GfxCmdList.Reset();
+
+    if (!asdx::GuiMgr::Instance().Init(m_GfxCmdList, m_hWnd, m_Width, m_Height, DXGI_FORMAT_R8G8B8A8_UNORM, nullptr))
+    {
+        return false;
+    }
+
+    m_GfxCmdList.Close();
+
+    ID3D12CommandList* lists[] = {
+        m_GfxCmdList.GetCommandList()
+    };
+
+    auto queue = asdx::GetGraphicsQueue();
+    queue->Execute(1, lists);
+    m_WaitPoint = queue->Signal();
+    queue->Sync(m_WaitPoint);
 
     return true;
 }
@@ -492,6 +513,8 @@ bool App::OnInit()
 //-------------------------------------------------------------------------------------------------
 void App::OnTerm()
 {
+    asdx::GuiMgr::Instance().Term();
+
     for(size_t i=0; i<m_Meshes.size(); ++i)
     { 
         m_Meshes[i].VB.Term();
@@ -534,7 +557,7 @@ void App::OnFrameMove(asdx::FrameEventArgs& param)
         auto ptr = m_SceneParam.MapAs<SceneParam>();
 
         ptr->View           = m_CameraController.GetView();
-        ptr->Proj           = asdx::Matrix::CreatePerspectiveFieldOfView(fov, aspect, nearClip, farClip);
+        ptr->Proj           = asdx::Matrix::CreatePerspectiveFieldOfViewReverseZ(fov, aspect, nearClip);
         ptr->InvView        = asdx::Matrix::Invert(ptr->View);
         ptr->InvProj        = asdx::Matrix::Invert(ptr->Proj);
         ptr->NearClip       = nearClip;
@@ -547,7 +570,7 @@ void App::OnFrameMove(asdx::FrameEventArgs& param)
 
     // SSAOパラメータ更新.
     {
-        float radius = 0.5f;
+        float radius = m_Radius;
         float tanHalfFovy = tan(fov * 0.5f);
 
         auto ptr = m_SsaoParam.MapAs<SsaoParam>();
@@ -556,8 +579,8 @@ void App::OnFrameMove(asdx::FrameEventArgs& param)
         ptr->InvSize.y          = 1.0f / float(m_Height);
         ptr->RadiusScreenSpace  = radius * 0.5f / tanHalfFovy * m_Height;
         ptr->InvRadius2         = -1.0f / (radius * radius);
-        ptr->Bias               = 1e-4f;
-        ptr->Intensity          = 1.0f;
+        ptr->Bias               = m_Bias;
+        ptr->Intensity          = m_Intensity;
 
         m_SsaoParam.Unmap();
     }
@@ -593,7 +616,7 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
         // バッファをクリア.
-        m_GfxCmdList.ClearDSV(m_DepthTarget.GetDSV(), 1.0f);
+        m_GfxCmdList.ClearDSV(m_DepthTarget.GetDSV(), m_ClearDepth);
         m_GfxCmdList.ClearRTV(m_NormalTarget.GetRTV(), clearColor);
 
         // レンダーターゲット設定.
@@ -742,6 +765,17 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
 
         // 描画キック.
         m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
+
+        asdx::GuiMgr::Instance().Update(m_Width, m_Height);
+        ImGui::SetNextWindowSize(ImVec2(240, 100), ImGuiCond_Once);
+        if (ImGui::Begin(u8"SSAO Parameter"))
+        {
+            ImGui::DragFloat(u8"Radius", &m_Radius, 0.1f, 0.0f, 1000.0f, "%.2f");
+            ImGui::DragFloat(u8"Intensity", &m_Intensity, 0.1f, 0.0f, 1000.0f, "%.2f");
+            ImGui::DragFloat(u8"Bias", &m_Bias, 0.01f, -1000.0f, 1000.0f, "%.2f");
+            ImGui::End();
+        }
+        asdx::GuiMgr::Instance().Draw(pCmd);
     }
 
     // コマンド記録終了.
@@ -777,20 +811,48 @@ void App::OnResize(const asdx::ResizeEventArgs& param)
     m_BlurTarget1 .Resize(param.Width, param.Height);
 }
 
+//-----------------------------------------------------------------------------
+//      マウスの処理です.
+//-----------------------------------------------------------------------------
 void App::OnMouse(const asdx::MouseEventArgs& param)
 {
-    m_CameraController.OnMouse(
-        param.X,
-        param.Y,
-        param.WheelDelta,
-        param.IsLeftButtonDown,
-        param.IsRightButtonDown,
-        param.IsMiddleButtonDown,
-        param.IsSideButton1Down,
-        param.IsSideButton2Down);
+    bool isAltDown = GetAsyncKeyState(VK_MENU) & 0x1;
+    if (isAltDown) {
+        m_CameraController.OnMouse(
+            param.X,
+            param.Y,
+            param.WheelDelta,
+            param.IsLeftButtonDown,
+            param.IsRightButtonDown,
+            param.IsMiddleButtonDown,
+            param.IsSideButton1Down,
+            param.IsSideButton2Down);
+    }
+    else
+    {
+        asdx::GuiMgr::Instance().OnMouse(
+            param.X,
+            param.Y,
+            param.WheelDelta,
+            param.IsLeftButtonDown,
+            param.IsMiddleButtonDown,
+            param.IsRightButtonDown);
+    }
 }
 
+//-----------------------------------------------------------------------------
+//      キーの処理です.
+//-----------------------------------------------------------------------------
 void App::OnKey(const asdx::KeyEventArgs& param)
 {
     m_CameraController.OnKey(param.KeyCode, param.IsKeyDown, param.IsAltDown);
+    asdx::GuiMgr::Instance().OnKey(param.IsKeyDown, param.IsAltDown, param.KeyCode);
+}
+
+//-----------------------------------------------------------------------------
+//      タイピング処理です.
+//-----------------------------------------------------------------------------
+void App::OnTyping(uint32_t code)
+{
+    asdx::GuiMgr::Instance().OnTyping(code);
 }

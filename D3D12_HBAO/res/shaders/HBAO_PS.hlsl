@@ -85,17 +85,20 @@ float3 UnpackNormal(float2 packed)
 }
 
 //-----------------------------------------------------------------------------
-//      ハードウェアから出力された深度をビュー空間深度に変換します.
+//      ハードウェアから出力されたReverse-Zをビュー空間深度に変換します.
 //-----------------------------------------------------------------------------
-float ToViewDepth(float hardwareDepth, float nearClip, float farClip)
-{ return -nearClip * farClip / (hardwareDepth * (nearClip - farClip) + farClip); }
+float ToViewDepth(float hardwareDepth, float nearClip)
+{
+    return -nearClip / hardwareDepth;
+}
 
 //-----------------------------------------------------------------------------
 //      ビュー空間位置を求めます.
 //-----------------------------------------------------------------------------
 float3 ToViewPos(float2 uv)
 {
-    float viewZ = ToViewDepth(DepthMap.SampleLevel(LinearSampler, uv, 0.0f), Scene.NearClip, Scene.FarClip);
+    float hardwareZ = DepthMap.SampleLevel(LinearSampler, uv, 0.0f);
+    float viewZ = ToViewDepth(hardwareZ, Scene.NearClip);
     float2 p = uv * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f);
     p *= -viewZ * float2(1.0f / Scene.Proj._11, 1.0f / Scene.Proj._22);
     return float3(p, viewZ);
@@ -123,6 +126,27 @@ float2 Rotate(float2 dir, float2 cos_sin)
 }
 
 //-----------------------------------------------------------------------------
+//      乱数を求めます.
+//-----------------------------------------------------------------------------
+float4 R3Sequence(int2 ssP)
+{
+    int n = ssP.x ^ ssP.y; // 超適当.
+
+    // "The Unreasonable Effectiveness of Quasirandom Sequence",
+    // http://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
+    const float g = 1.6180339887498948482; // 黄金比を使った方が綺麗に出たので...
+    const float g2 = g * g;
+    const float a1 = 1.0f / g;
+    const float a2 = 1.0f / g2;
+    const float a3 = 1.0f / (g2 * g);
+    return float4(
+        frac(0.5f + a1 * n),
+        frac(0.5f + a2 * n),
+        frac(0.5f + a3 * n),
+        1.0f);
+};
+
+//-----------------------------------------------------------------------------
 //      エントリーポイントです.
 //-----------------------------------------------------------------------------
 float main(const VSOutput input) : SV_TARGET0
@@ -146,19 +170,8 @@ float main(const VSOutput input) : SV_TARGET0
     n0 = mul((float3x3)Scene.View, n0);
     n0 = normalize(n0);
 
-    int2  ssP = input.Position.xy;
-        
-    // ハッシュ関数により回転角を求める.
-    // HPG12 "Scalable Ambinent Obscurance" (Equation.8) 参照. 
-    float angle = (3 * ssP.x ^ ssP.y + ssP.x * ssP.y) * 10;
-
-    // 回転行列.
-    float sinA;
-    float cosA;
-    sincos(angle, sinA, cosA);
-
-    // 適当な乱数.
-    float4 rand = float4(cosA, sinA, 1 - sinA * cosA, 1);
+    // 乱数.
+    float4 rand = R3Sequence(input.Position.xy);
 
     // レイマーチのステップサイズ.
     const float StepSize = radiusPixels / (STEP_COUNT + 1);

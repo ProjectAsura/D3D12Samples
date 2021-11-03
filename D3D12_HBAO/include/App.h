@@ -56,6 +56,7 @@ protected:
     void OnResize       (const asdx::ResizeEventArgs& param) override;
     void OnMouse        (const asdx::MouseEventArgs& param) override;
     void OnKey          (const asdx::KeyEventArgs& param) override;
+    void OnTyping       (uint32_t code) override;
 
 private:
     //=============================================================================================
@@ -84,6 +85,10 @@ private:
     asdx::ConstantBuffer    m_SsaoParam;
     asdx::VertexBuffer      m_FullScreenVB;
     asdx::CameraController  m_CameraController;
+
+    float m_Radius      = 20.0f;
+    float m_Intensity   = 2.0f;
+    float m_Bias        = 0.0f;
 
     //=============================================================================================
     // private methods.
