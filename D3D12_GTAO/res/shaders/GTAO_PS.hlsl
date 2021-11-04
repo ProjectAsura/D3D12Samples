@@ -1,6 +1,6 @@
 //-----------------------------------------------------------------------------
-// File : Alchemy_PS.hlsl
-// Desc : Alchemy Ambient Obscurance.
+// File : GTAO_PS.hlsl
+// Desc : Grand Truth Based Ambient Occlusion.
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
 
@@ -112,6 +112,7 @@ float EvalAO(float3 p0, float3 p, float3 n)
     float  vn  = dot(v, n);
     return max(0, (vn + Param.Bias) / (vv + 1e-6f));
 }
+
 
 //-----------------------------------------------------------------------------
 //      エントリーポイントです.
