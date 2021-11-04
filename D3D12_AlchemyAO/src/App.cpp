@@ -78,7 +78,8 @@ struct SsaoParam
     float           InvRadius2;
     float           Bias;
     float           Intensity;
-    float           Reserved[2];
+    float           Sigma;
+    float           Reserved;
 };
 
 static const D3D12_INPUT_ELEMENT_DESC g_InputElements[] = {
@@ -588,6 +589,7 @@ void App::OnFrameMove(asdx::FrameEventArgs& param)
         ptr->InvRadius2         = -1.0f / (radius * radius);
         ptr->Bias               = m_Bias;
         ptr->Intensity          = m_Intensity;
+        ptr->Sigma              = m_Sigma;
 
         m_SsaoParam.Unmap();
     }
@@ -686,7 +688,7 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
         m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
     }
 
-    auto blurSharpness = 1.0f / m_CameraController.GetFarClip();
+    auto blurSharpness = m_BlurSharpenss;
 
     //　水平ブラー.
     {
@@ -774,12 +776,14 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
         m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
 
         asdx::GuiMgr::Instance().Update(m_Width, m_Height);
-        ImGui::SetNextWindowSize(ImVec2(240, 100), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(240, 140), ImGuiCond_Once);
         if (ImGui::Begin(u8"SSAO パラメータ"))
         {
             ImGui::DragFloat(u8"半径", &m_Radius, 0.1f, 0.0f, 1000.0f, "%.2f");
             ImGui::DragFloat(u8"強度", &m_Intensity, 0.1f, 0.0f, 1000.0f, "%.2f");
             ImGui::DragFloat(u8"バイアス", &m_Bias, 0.01f, -1000.0f, 1000.0f, "%.2f");
+            ImGui::DragFloat(u8"AO係数", &m_Sigma, 0.1f, 0.0f, 1000.0f, "%.2f");
+            ImGui::DragFloat(u8"鮮明度", &m_BlurSharpenss, 1.0f, 0.1f, 10000.0f, "%.2f");
             ImGui::End();
         }
         asdx::GuiMgr::Instance().Draw(pCmd);

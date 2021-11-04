@@ -774,7 +774,7 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
         m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
 
         asdx::GuiMgr::Instance().Update(m_Width, m_Height);
-        ImGui::SetNextWindowSize(ImVec2(240, 100), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(240, 120), ImGuiCond_Once);
         if (ImGui::Begin(u8"SSAO ÉpÉâÉÅÅ[É^"))
         {
             ImGui::DragFloat(u8"îºåa", &m_Radius, 0.1f, 0.0f, 1000.0f, "%.2f");

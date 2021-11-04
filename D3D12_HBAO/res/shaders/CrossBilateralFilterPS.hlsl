@@ -4,7 +4,7 @@
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
 
-#define KARNEL_RADIUS   (5)
+#define KARNEL_RADIUS   (4)
 
 ///////////////////////////////////////////////////////////////////////////////
 // VSOutput structure
@@ -57,7 +57,7 @@ float main(const VSOutput input) : SV_TARGET0
     float2 uv0 = input.TexCoord;
 
     float ao0 = AoMap.Sample(PointSampler, uv0);
-    float z0  = DepthMap.Sample(PointSampler, uv0);
+    float z0  = 1.0f - DepthMap.Sample(PointSampler, uv0); // Reverse-Z
 
     float totalAO = ao0;
     float totalW  = 1.0f;

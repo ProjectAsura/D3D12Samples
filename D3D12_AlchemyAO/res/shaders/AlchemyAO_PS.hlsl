@@ -4,15 +4,9 @@
 // Copyright(c) Project Asura. All right reserved.
 //-----------------------------------------------------------------------------
 
-
-#ifndef DIR_COUNT
-#define DIR_COUNT   (4)    // サンプリング方向.
-#endif//DIR_COUNT
-
-#ifndef STEP_COUNT
-#define STEP_COUNT  (8)    // 1方向あたりのレイマーチ数.
-#endif//STEP_COUNT
-
+#ifndef SAMPLE_COUNT
+#define SAMPLE_COUNT        (16)    // サンプル数.
+#endif//SAMPLE_COUNT
 
 ///////////////////////////////////////////////////////////////////////////////
 // VSOutput structure
@@ -33,7 +27,8 @@ struct HBAOParam
     float   InvRadius2; // -1.0 / (Radius * Radius).
     float   Bias;       // バイアス.
     float   Intensity;  // 強度.
-    float2  Reserved;
+    float   Sigma;      // シグマ.
+    float   Reserved;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -173,50 +168,32 @@ float main(const VSOutput input) : SV_TARGET0
     n0 = mul((float3x3)Scene.View, n0);
     n0 = normalize(n0);
 
-    // 乱数.
-    float4 rand = R1Sequence(input.Position.xy);
-
-    // レイマーチのステップサイズ.
-    const float StepSize = radiusPixels / (STEP_COUNT + 1);
-
-    // １方向あたりの回転角.
-    const float Alpha = 2.0 * PI / DIR_COUNT;
+    // Interleaved Gradient Noise.
+    float3 m = float3(0.06711056f, 0.0233486, 52.9829189f);
+    float  phi = frac(m.z * frac(dot(input.Position.xy, m.xy)));
 
     // アンビエントオクルージョン.
     float occlusion = 0;
 
     [unroll]
-    for(int d = 0; d < DIR_COUNT; ++d)
+    for(int i = 0; i < SAMPLE_COUNT; ++i)
     {
-        // 回転角を求める.
-        float  theta = Alpha * d;
+        // Vogel Disk Sampling.
+        float theta = 2.4f * i + phi;
+        float r = sqrt((i + 0.5f) / SAMPLE_COUNT);
+        float2 dir = float2(cos(theta), sin(theta)) * r;
 
-        // 回転角をもとにレイの方向を求める.
-        float2 dir = Rotate(float2(cos(theta), sin(theta)), rand.xy);
+        // レイマーチしたテクスチャ座標を求める.
+        float2 st = uv + radiusPixels * dir * Param.InvSize;
 
-        // レイ
-        float ray = (rand.z * StepSize + 1.0f);
+        // テクスチャ座標から位置座標を復元.
+        float3 p = ToViewPos(st);
 
-        [unroll]
-        for(int s = 0; s < STEP_COUNT; ++s)
-        {
-            // レイマーチしたテクスチャ座標を求める.
-            float2 st  = round(ray * dir) * Param.InvSize + uv;
-
-            // テクスチャ座標から位置座標を復元.
-            float3 p = ToViewPos(st);
-
-            // AOの寄与を求める.
-            occlusion += EvalAO(p0, p, n0);
-
-            // レイを進める.
-            ray += StepSize;
-        }
+        // AOの寄与を求める.
+        occlusion += EvalAO(p0, p, n0);
     }
 
-    const float sigma = 1.0f;
-    const float sampleCount = (DIR_COUNT * STEP_COUNT);
-    occlusion = max(0.0f, 1.0f - 2.0f * sigma / sampleCount * occlusion);
+    occlusion = max(0.0f, 1.0f - 2.0f * Param.Sigma / SAMPLE_COUNT * occlusion);
     occlusion = pow(occlusion, Param.Intensity);
 
     return occlusion;
