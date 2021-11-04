@@ -29,7 +29,7 @@ struct BlurParam
 // Textures and Samplers
 //-----------------------------------------------------------------------------
 ConstantBuffer<BlurParam>   Param           : register(b3);
-Texture2D<float>            DepthMap        : register(t0);
+Texture2D<float>            DepthMap        : register(t0); // Reverse-Z
 Texture2D<float>            AoMap           : register(t1);
 SamplerState                PointSampler    : register(s0);
 SamplerState                LinearSampler   : register(s1);
@@ -72,7 +72,7 @@ float main(const VSOutput input) : SV_TARGET0
     {
         float2 uv = uv0 + r * Param.SampleDir;
         float ao = AoMap.Sample(PointSampler, uv);
-        float z  = DepthMap.Sample(PointSampler, uv);
+        float z  = 1.0f - DepthMap.Sample(PointSampler, uv); // Reverse-Z
 
         float w = CrossBilateralWeight(r, z, z0);
 
@@ -84,7 +84,7 @@ float main(const VSOutput input) : SV_TARGET0
     {
         float2 uv = uv0 + (r + 0.5f) * Param.SampleDir;
         float ao = AoMap.Sample(LinearSampler, uv);
-        float z  = DepthMap.Sample(LinearSampler, uv);
+        float z  = 1.0f - DepthMap.Sample(LinearSampler, uv); // Reverse-Z
 
         float w = CrossBilateralWeight(r, z, z0);
 
@@ -101,7 +101,7 @@ float main(const VSOutput input) : SV_TARGET0
     {
         float2 uv = uv0 - r * Param.SampleDir;
         float ao = AoMap.Sample(PointSampler, uv);
-        float z  = DepthMap.Sample(PointSampler, uv);
+        float z  = 1.0f - DepthMap.Sample(PointSampler, uv); // Reverse-Z
 
         float w = CrossBilateralWeight(r, z, z0);
 
@@ -113,7 +113,7 @@ float main(const VSOutput input) : SV_TARGET0
     {
         float2 uv = uv0 - (r + 0.5f) * Param.SampleDir;
         float ao = AoMap.Sample(LinearSampler, uv);
-        float z  = DepthMap.Sample(LinearSampler, uv);
+        float z  = 1.0f - DepthMap.Sample(LinearSampler, uv); // Reverse-Z
 
         float w = CrossBilateralWeight(r, z, z0);
 

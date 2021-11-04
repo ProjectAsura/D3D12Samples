@@ -686,7 +686,7 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
         m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
     }
 
-    auto blurSharpness = 1.0f / m_CameraController.GetFarClip();
+    auto blurSharpness = m_BlurSharpenss;
 
     //　水平ブラー.
     {
@@ -780,6 +780,7 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
             ImGui::DragFloat(u8"半径", &m_Radius, 0.1f, 0.0f, 1000.0f, "%.2f");
             ImGui::DragFloat(u8"強度", &m_Intensity, 0.1f, 0.0f, 1000.0f, "%.2f");
             ImGui::DragFloat(u8"バイアス", &m_Bias, 0.01f, -1000.0f, 1000.0f, "%.2f");
+            ImGui::DragFloat(u8"鮮明度", &m_BlurSharpenss, 1.0f, 0.1f, 10000.0f, "%.2f");
             ImGui::End();
         }
         asdx::GuiMgr::Instance().Draw(pCmd);

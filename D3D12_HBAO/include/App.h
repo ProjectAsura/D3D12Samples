@@ -86,9 +86,10 @@ private:
     asdx::VertexBuffer      m_FullScreenVB;
     asdx::CameraController  m_CameraController;
 
-    float m_Radius      = 20.0f;
-    float m_Intensity   = 2.0f;
-    float m_Bias        = 0.0f;
+    float m_Radius          = 20.0f;
+    float m_Intensity       = 2.0f;
+    float m_Bias            = 0.0f;
+    float m_BlurSharpenss   = 1.0f;
 
     //=============================================================================================
     // private methods.

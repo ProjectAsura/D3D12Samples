@@ -5,13 +5,9 @@
 //-----------------------------------------------------------------------------
 
 
-#ifndef DIR_COUNT
-#define DIR_COUNT   (4)    // サンプリング方向.
-#endif//DIR_COUNT
-
-#ifndef STEP_COUNT
-#define STEP_COUNT  (8)    // 1方向あたりのレイマーチ数.
-#endif//STEP_COUNT
+#ifndef SAMPLE_COUNT
+#define SAMPLE_COUNT        (16)    // サンプル数.
+#endif//SAMPLE_COUNT
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -116,37 +112,6 @@ float EvalAO(float3 p0, float3 p, float3 n)
 }
 
 //-----------------------------------------------------------------------------
-//      ２次元ベクトルを回転させます.
-//-----------------------------------------------------------------------------
-float2 Rotate(float2 dir, float2 cos_sin)
-{
-    return float2(
-        dir.x * cos_sin.x - dir.y * cos_sin.y,
-        dir.x * cos_sin.y + dir.y * cos_sin.x);
-}
-
-//-----------------------------------------------------------------------------
-//      乱数を求めます.
-//-----------------------------------------------------------------------------
-float4 R1Sequence(int2 ssP)
-{
-    int n = ssP.x ^ ssP.y; // 結果が良くなるように, すっごく適当に決めた.
-
-    // 参考, "The Unreasonable Effectiveness of Quasirandom Sequence",
-    // http://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
-    const float g = 1.6180339887498948482; // 黄金比を使った方が良い結果になったので...
-    const float g2 = g * g;
-    const float a1 = 1.0f / g;
-    const float a2 = 1.0f / g2;
-    const float a3 = 1.0f / (g2 * g);
-    return float4(
-        frac(0.5f + a1 * n),
-        frac(0.5f + a2 * n),
-        frac(0.5f + a3 * n),
-        1.0f);
-};
-
-//-----------------------------------------------------------------------------
 //      エントリーポイントです.
 //-----------------------------------------------------------------------------
 float main(const VSOutput input) : SV_TARGET0
@@ -170,48 +135,32 @@ float main(const VSOutput input) : SV_TARGET0
     n0 = mul((float3x3)Scene.View, n0);
     n0 = normalize(n0);
 
-    // 乱数.
-    float4 rand = R1Sequence(input.Position.xy);
-
-    // レイマーチのステップサイズ.
-    const float StepSize = radiusPixels / (STEP_COUNT + 1);
-
-    // １方向あたりの回転角.
-    const float Alpha = 2.0 * PI / DIR_COUNT;
+    // Interleaved Gradient Noise.
+    float3 m = float3(0.06711056f, 0.0233486, 52.9829189f);
+    float  phi = frac(m.z * frac(dot(input.Position.xy, m.xy)));
 
     // アンビエントオクルージョン.
     float occlusion = 0;
 
     [unroll]
-    for(int d = 0; d < DIR_COUNT; ++d)
+    for(int i = 0; i < SAMPLE_COUNT; ++i)
     {
-        // 回転角を求める.
-        float  theta = Alpha * d;
+        // Vogel Disk Sampling.
+        float theta = 2.4f * i + phi;
+        float r = sqrt((i + 0.5f) / SAMPLE_COUNT);
+        float2 dir = float2(cos(theta), sin(theta)) * r;
 
-        // 回転角をもとにレイの方向を求める.
-        float2 dir = Rotate(float2(cos(theta), sin(theta)), rand.xy);
+        // レイマーチしたテクスチャ座標を求める.
+        float2 st  = uv + radiusPixels * dir * Param.InvSize;
 
-        // レイ
-        float ray = (rand.z * StepSize + 1.0f);
+        // テクスチャ座標から位置座標を復元.
+        float3 p = ToViewPos(st);
 
-        [unroll]
-        for(int s = 0; s < STEP_COUNT; ++s)
-        {
-            // レイマーチしたテクスチャ座標を求める.
-            float2 st  = round(ray * dir) * Param.InvSize + uv;
-
-            // テクスチャ座標から位置座標を復元.
-            float3 p = ToViewPos(st);
-
-            // AOの寄与を求める.
-            occlusion += EvalAO(p0, p, n0);
-
-            // レイを進める.
-            ray += StepSize;
-        }
+        // AOの寄与を求める.
+        occlusion += EvalAO(p0, p, n0);
     }
 
-    occlusion /= (DIR_COUNT * STEP_COUNT);
+    occlusion /= SAMPLE_COUNT;
     occlusion = saturate(1.0f - occlusion);
     occlusion = pow(occlusion, Param.Intensity);
 
