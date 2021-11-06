@@ -50,6 +50,7 @@ struct SceneParam
 // Constant Values.
 //-----------------------------------------------------------------------------
 static const float PI = 3.1415926535897932384626433832795f;
+static const float HALF_PI = 1.5707963267948966192313216916398f;
 
 //-----------------------------------------------------------------------------
 // Textures and Samplers
@@ -113,6 +114,52 @@ float EvalAO(float3 p0, float3 p, float3 n)
     return max(0, (vn + Param.Bias) / (vv + 1e-6f));
 }
 
+// From https://www.shadertoy.com/view/3tB3z3 - except we're using R2 here
+#define XE_HILBERT_LEVEL    6U
+#define XE_HILBERT_WIDTH    ( (1U << XE_HILBERT_LEVEL) )
+#define XE_HILBERT_AREA     ( XE_HILBERT_WIDTH * XE_HILBERT_WIDTH )
+inline uint HilbertIndex( uint posX, uint posY )
+{   
+    uint index = 0U;
+    for( uint curLevel = XE_HILBERT_WIDTH/2U; curLevel > 0U; curLevel /= 2U )
+    {
+        uint regionX = ( posX & curLevel ) > 0U;
+        uint regionY = ( posY & curLevel ) > 0U;
+        index += curLevel * curLevel * ( (3U * regionX) ^ regionY);
+        if( regionY == 0U )
+        {
+            if( regionX == 1U )
+            {
+                posX = uint( (XE_HILBERT_WIDTH - 1U) ) - posX;
+                posY = uint( (XE_HILBERT_WIDTH - 1U) ) - posY;
+            }
+
+            uint temp = posX;
+            posX = posY;
+            posY = temp;
+        }
+    }
+    return index;
+}
+
+// Engine-specific screen & temporal noise loader
+float2 SpatioTemporalNoise( uint2 pixCoord, uint temporalIndex )    // without TAA, temporalIndex is always 0
+{
+    float2 noise;
+    uint index = HilbertIndex( pixCoord.x, pixCoord.y );
+    index += 288*(temporalIndex%64); // why 288? tried out a few and that's the best so far (with XE_HILBERT_LEVEL 6U) - but there's probably better :)
+    // R2 sequence - see http://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
+    return float2( frac( 0.5 + index * float2(0.75487766624669276005, 0.5698402909980532659114) ) );
+}
+
+
+#define GTAO_DEFAULT_RADIUS_MULTIPLIER               (1.457f  )  // allows us to use different value as compared to ground truth radius to counter inherent screen space biases
+#define GTAO_DEFAULT_FALLOFF_RANGE                   (0.615f  )  // distant samples contribute less
+#define GTAO_DEFAULT_SAMPLE_DISTRIBUTION_POWER       (2.0f    )  // small crevices more important than big surfaces
+#define GTAO_DEFAULT_THIN_OCCLUDER_COMPENSATION      (0.0f    )  // the new 'thickness heuristic' approach
+#define GTAO_DEFAULT_FINAL_VALUE_POWER               (2.2f    )  // modifies the final ambient occlusion value using power function - this allows some of the above heuristics to do different things
+#define GTAO_DEFAULT_DEPTH_MIP_SAMPLING_OFFSET       (3.30f   )  // main trade-off between performance (memory bandwidth) and quality (temporal stability is the first affected, thin objects next)
+
 
 //-----------------------------------------------------------------------------
 //      エントリーポイントです.
@@ -133,38 +180,115 @@ float main(const VSOutput input) : SV_TARGET0
         return 1.0f;
     }
 
+    const float effectRadius = Param.RadiusSS * GTAO_DEFAULT_RADIUS_MULTIPLIER;
+    const float falloffRange = GTAO_DEFAULT_FALLOFF_RANGE * effectRadius;
+    const float falloffFrom  = effectRadius * (1.0f - GTAO_DEFAULT_FALLOFF_RANGE);
+
+    // fadeout precompute optimisation
+    const float falloffMul        = -1.0 / falloffRange;
+    const float falloffAdd        = falloffFrom / falloffRange + 1.0;
+
     // 中心の法線ベクトル.
     float3 n0 = UnpackNormal(NormalMap.SampleLevel(LinearSampler, uv, 0.0f));
     n0 = mul((float3x3)Scene.View, n0);
     n0 = normalize(n0);
 
-    // Interleaved Gradient Noise.
-    float3 m = float3(0.06711056f, 0.0233486, 52.9829189f);
-    float  phi = frac(m.z * frac(dot(input.Position.xy, m.xy)));
+    //// Interleaved Gradient Noise.
+    //float3 m = float3(0.06711056f, 0.0233486, 52.9829189f);
+    //float  angle = frac(m.z * frac(dot(input.Position.xy, m.xy)));
+    float2 noise = SpatioTemporalNoise((uint2)input.Position.xy, 0);
 
-    // アンビエントオクルージョン.
-    float occlusion = 0;
+    float3 viewV = normalize(-p0);
+    float visibility = 0.0f;
+
+    const int SliceCount = 4;
+    const int StepCount = 4;
+
+    const float pixelTooCloseThreshold  = 1.3f;
+    const float minS = pixelTooCloseThreshold / radiusPixels;
 
     [unroll]
-    for(int i = 0; i < SAMPLE_COUNT; ++i)
+    for(float slice = 0; slice < SliceCount; ++slice)
     {
-        // Vogel Disk Sampling.
-        float theta = 2.4f * i + phi;
-        float r = sqrt((i + 0.5f) / SAMPLE_COUNT);
-        float2 dir = float2(cos(theta), sin(theta)) * r;
+        float sliceK = (slice + noise.x) / float(SliceCount);
+        float phi = sliceK * PI;
+        float cosPhi = cos(phi);
+        float sinPhi = sin(phi);
+        float2 omega = float2(cosPhi, -sinPhi);
+        omega *= radiusPixels;
 
-        // レイマーチしたテクスチャ座標を求める.
-        float2 st = uv + radiusPixels * dir * Param.InvSize;
+        const float3 directionVec = float3(cosPhi, sinPhi, 0);
+        const float3 orthoDirectionVec = directionVec - (dot(directionVec, viewV) * viewV);
+        const float3 axisVec = normalize(cross(orthoDirectionVec, viewV));
+        float3 projectedNormalVec = n0 - axisVec * dot(n0, axisVec);
+        float signNorm = (float)sign(dot(orthoDirectionVec, projectedNormalVec));
 
-        // テクスチャ座標から位置座標を復元.
-        float3 p = ToViewPos(st);
+        float projectedNormalVecLength = length(projectedNormalVec);
+        float cosNorm = saturate(dot(projectedNormalVec, viewV) / projectedNormalVecLength);
 
-        // AOの寄与を求める.
-        occlusion += EvalAO(p0, p, n0);
+        float n = signNorm * acos(cosNorm);
+
+        const float lowHorizonCos0 = cos(n + HALF_PI);
+        const float lowHorizonCos1 = cos(n - HALF_PI);
+
+        float horizonCos0 = lowHorizonCos0;
+        float horizonCos1 = lowHorizonCos1;
+
+        [unroll]
+        for(float step = 0; step < StepCount; ++step)
+        {
+            // R1 sequence (http://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/)
+            const float stepBaseNoise = (slice + step * StepCount) * 0.6180339887498948482;
+            float stepNoise = frac(noise.y + stepBaseNoise);
+
+            float s = (step + stepNoise) / StepCount;
+            s += minS;
+
+            float2 sampleOffset = s * omega;
+            sampleOffset = round(sampleOffset) * Param.InvSize;
+
+            float2 uv0 = uv + sampleOffset;;
+            float2 uv1 = uv - sampleOffset;
+
+            float3 pos0 = ToViewPos(uv0);
+            float3 pos1 = ToViewPos(uv1);
+
+            float3 delta0 = pos0 - p0;
+            float3 delta1 = pos1 - p0;
+
+            float dist0 = length(delta0);
+            float dist1 = length(delta1);
+
+            float3 horizonV0 = normalize(pos0 - p0);
+            float3 horizonV1 = normalize(pos1 - p0);
+
+            float weight0 = saturate(dist0 * falloffMul + falloffAdd);
+            float weight1 = saturate(dist1 * falloffMul + falloffAdd);
+
+            float shc0 = dot(horizonV0, viewV);
+            float shc1 = dot(horizonV1, viewV);
+
+            shc0 = lerp(lowHorizonCos0, shc0, weight0);
+            shc1 = lerp(lowHorizonCos1, shc1, weight1);
+
+            horizonCos0 = max(horizonCos0, shc0);
+            horizonCos1 = max(horizonCos1, shc1);
+        }
+
+        float h0 = -acos(horizonCos1);
+        float h1 =  acos(horizonCos0);
+
+        h0 = n + clamp(h0 - n, -HALF_PI, HALF_PI);
+        h1 = n + clamp(h1 - n, -HALF_PI, HALF_PI);
+
+        float arc0 = (cosNorm + 2.0f * h0 * sin(n) - cos(2.0f * h0 - n)) / 4;
+        float arc1 = (cosNorm + 2.0f * h1 * sin(n) - cos(2.0f * h1 - n)) / 4;
+        float localVisibility = projectedNormalVecLength * (arc0 + arc1);
+        visibility += localVisibility;
     }
 
-    occlusion = max(0.0f, 1.0f - 2.0f * Param.Sigma / SAMPLE_COUNT * occlusion);
-    occlusion = pow(occlusion, Param.Intensity);
+    visibility /= (float)SliceCount;
+    visibility = pow(visibility, Param.Intensity);
 
-    return occlusion;
+    return visibility;
 };
