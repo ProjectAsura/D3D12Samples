@@ -105,6 +105,7 @@ float3 ToViewPos(float2 uv)
 //-----------------------------------------------------------------------------
 float EvalAO(float3 p0, float3 p, float3 n)
 {
+    // Horizon-Based AO.
     float3 v = p - p0;
     float  vv  = dot(v, v);
     float  vn  = dot(v, n) * rsqrt(vv);
