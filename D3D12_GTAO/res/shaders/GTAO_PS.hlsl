@@ -22,17 +22,13 @@ struct VSOutput
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// HBAOParam structure
+// GTAOParam structure
 ///////////////////////////////////////////////////////////////////////////////
-struct HBAOParam
+struct GTAOParam
 {
-    float2  InvSize;    // レンダーターゲットサイズの逆数.
-    float   RadiusSS;   // スクリーン空間の半径.
-    float   InvRadius2; // -1.0 / (Radius * Radius).
-    float   Bias;       // バイアス.
-    float   Intensity;  // 強度.
-    float   Sigma;      // シグマ.
-    float   Reserved;
+    float2  InvSize;        // レンダーターゲットサイズの逆数.
+    float   RadiusSS;       // スクリーン空間の半径.
+    float   FalloffRange;   // フォールオフ範囲.
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -55,6 +51,7 @@ struct SceneParam
 //-----------------------------------------------------------------------------
 static const float PI = 3.1415926535897932384626433832795f;
 static const float HALF_PI = 1.5707963267948966192313216916398f;
+static const float FLT_MAX = 3.402823466e+38f; // 浮動小数の最大値.
 
 //-----------------------------------------------------------------------------
 // Textures and Samplers
@@ -68,7 +65,13 @@ SamplerState        LinearSampler   : register(s1);
 // Constant Buffers.
 //-----------------------------------------------------------------------------
 ConstantBuffer<SceneParam> Scene : register(b1);
-ConstantBuffer<HBAOParam>  Param : register(b2);
+ConstantBuffer<GTAOParam>  Param : register(b2);
+
+//-----------------------------------------------------------------------------
+//      精度浮動小数の最大値未満に飽和させます.
+//-----------------------------------------------------------------------------
+float SaturateFloat(float value)
+{ return clamp(value, 0.0f, FLT_MAX); }
 
 //-----------------------------------------------------------------------------
 //      法線ベクトルをアンパッキングします.
@@ -104,9 +107,28 @@ float3 ToViewPos(float2 uv)
     return float3(p, viewZ);
 }
 
+//-----------------------------------------------------------------------------
+//      R1数列.
+//-----------------------------------------------------------------------------
 float R1Sequence(float number)
 {
-    return frac(number * 0.6180339887498948482);
+    // Martin Roberts, "The Unreasonable Effectiveness of Quasirandom Sequences", 2018
+    // http://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
+
+    // g  = 1.6180339887498948482;
+    // a1 = 1 / g = 0.6180339887498948482
+    return frac(0.5f + number * 0.6180339887498948482);
+}
+
+//-----------------------------------------------------------------------------
+//      R2数列.
+//-----------------------------------------------------------------------------
+float2 R2Sequence(float number)
+{
+    // g = 1.32471795724474602596
+    // a1 = 1 / g       = 0.75487766624669276005
+    // a2 = 1 / (g * g) = 0.5698402909980532659114;
+    return frac(0.5f.xx + number * float2(0.75487766624669276005, 0.5698402909980532659114));
 }
 
 //-----------------------------------------------------------------------------
@@ -134,7 +156,7 @@ float main(const VSOutput input) : SV_TARGET0
     n0 = normalize(n0);
 
     float3 m = float3(0.06711056f, 0.0233486, 52.9829189f);
-    float  noise = frac(m.z * frac(dot(input.Position.xy, m.xy)));
+    float2 noise = R2Sequence(m.z * dot(input.Position.xy, m.xy));
 
     float3 view = normalize(-p0);
     float visibility = 0.0f;
@@ -142,10 +164,16 @@ float main(const VSOutput input) : SV_TARGET0
     const float pixelTooCloseThreshold  = 1.3f;
     const float minS = pixelTooCloseThreshold / radiusPixels;
 
+    const float falloffRange    = radiusPixels * Param.FalloffRange;
+    const float falloffFrom     = radiusPixels * (1 - Param.FalloffRange);
+    const float falloffMul      = -1.0 / falloffRange;
+    const float falloffAdd      = SaturateFloat(falloffFrom / falloffRange) + 1.0;
+
+
     [unroll]
     for(float slice = 0; slice < SLICE_COUNT; ++slice)
     {
-        float sliceK = (slice + noise) / float(SLICE_COUNT);
+        float sliceK = (slice + noise.x) / float(SLICE_COUNT);
         float phi = sliceK * PI;
 
         float cosPhi, sinPhi;
@@ -164,13 +192,17 @@ float main(const VSOutput input) : SV_TARGET0
         float g    = sgnG * acos(cosG);
         float sinG = sin(g);
 
-        float horizonCos0 = -1.0f;
-        float horizonCos1 = -1.0f;
+        const float lowHorizonCos0 = cos(g - HALF_PI);
+        const float lowHorizonCos1 = cos(g + HALF_PI);
+
+        float horizonCos0 = lowHorizonCos0;
+        float horizonCos1 = lowHorizonCos1;
 
         [unroll]
         for(float step = 0; step < STEP_COUNT; ++step)
         {
             float stepNoise = R1Sequence(slice + step * STEP_COUNT);
+            stepNoise = frac(stepNoise + noise.y);
             float s = (step + stepNoise) / float(STEP_COUNT) + minS;
 
             // hat_t(phi) * r.
@@ -180,14 +212,33 @@ float main(const VSOutput input) : SV_TARGET0
             float2 uv0 = uv - offset;
             float2 uv1 = uv + offset;
 
+            // ビュー空間位置を求める.
             float3 pos0 = ToViewPos(uv0);
             float3 pos1 = ToViewPos(uv1);
 
-            float3 horizonV0 = normalize(pos0 - p0);
-            float3 horizonV1 = normalize(pos1 - p0);
+            float3 diff0 = pos0 - p0;
+            float3 diff1 = pos1 - p0;
 
-            horizonCos0 = max(horizonCos0, dot(horizonV0, view));
-            horizonCos1 = max(horizonCos1, dot(horizonV1, view));
+            // 距離.
+            float dist0 = length(diff0);
+            float dist1 = length(diff1);
+
+            // ベクトル正規化.
+            float3 horizonV0 = diff0 / dist0;
+            float3 horizonV1 = diff1 / dist1;
+
+            // 水平角をサンプル.
+            float cos0 = dot(horizonV0, view);
+            float cos1 = dot(horizonV1, view);
+
+            float weight0 = saturate(mad(dist0, falloffMul, falloffAdd));
+            float weight1 = saturate(mad(dist1, falloffMul, falloffAdd));
+
+            cos0 = lerp(lowHorizonCos0, cos0, weight0);
+            cos1 = lerp(lowHorizonCos1, cos1, weight1);
+
+            horizonCos0 = max(horizonCos0, cos0);
+            horizonCos1 = max(horizonCos1, cos1);
         }
 
         // Equation(10).

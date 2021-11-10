@@ -1,4 +1,4 @@
-//-------------------------------------------------------------------------------------------------
+﻿//-------------------------------------------------------------------------------------------------
 // File : App.h
 // Desc : Application Module.
 // Copyright(c) Project Asura. All right reserved.
@@ -72,7 +72,9 @@ private:
 
     std::vector<Mesh>       m_Meshes;
     asdx::RootSignature     m_RootSig;
+    asdx::RootSignature     m_RootSigCS;
     asdx::PipelineState     m_SimplePSO;
+    asdx::PipelineState     m_HiZPSO;
     asdx::PipelineState     m_SsaoPSO;
     asdx::PipelineState     m_BlurPSO;
     asdx::PipelineState     m_CopyPSO;
@@ -86,9 +88,15 @@ private:
     asdx::VertexBuffer      m_FullScreenVB;
     asdx::CameraController  m_CameraController;
 
+    asdx::RefPtr<ID3D12Resource>                m_HiZBuffer;
+    asdx::RefPtr<asdx::IShaderResourceView>     m_HiZSRV;
+    std::vector<asdx::IUnorderedAccessView*>    m_HiZUAV;
+
     float m_Radius          = 20.0f;
-    float m_FalloffRange    = 0.1f;
+    float m_Intensity       = 2.0f;
+    float m_Bias            = 0.0f;
     float m_BlurSharpenss   = 1.0f;
+    float m_Sigma           = 4.0f;
 
     //=============================================================================================
     // private methods.

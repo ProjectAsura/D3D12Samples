@@ -1,4 +1,4 @@
-//-------------------------------------------------------------------------------------------------
+ï»¿//-------------------------------------------------------------------------------------------------
 // File : App.cpp
 // Desc : Application Module.
 // Copyright(c) Project Asura. All right reserved.
@@ -37,7 +37,8 @@ App*    g_pApp = nullptr;
 #include "../res/shaders/Compiled/SimpleVS.inc"
 #include "../res/shaders/Compiled/SimplePS.inc"
 #include "../res/shaders/Compiled/FullScreenVS.inc"
-#include "../res/shaders/Compiled/GTAO_PS.inc"
+#include "../res/shaders/Compiled/HiZ_CS.inc"
+#include "../res/shaders/Compiled/ScalableAO_PS.inc"
 #include "../res/shaders/Compiled/CrossBilateralFilterPS.inc"
 #include "../res/shaders/Compiled/CopyPS.inc"
 
@@ -75,7 +76,11 @@ struct SsaoParam
 {
     asdx::Vector2   InvSize;
     float           RadiusScreenSpace;
-    float           FalloffRange;
+    float           InvRadius2;
+    float           Bias;
+    float           Intensity;
+    float           Sigma;
+    float           Reserved;
 };
 
 static const D3D12_INPUT_ELEMENT_DESC g_InputElements[] = {
@@ -113,29 +118,29 @@ enum PARAM_INDEX
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 //-------------------------------------------------------------------------------------------------
-//      ƒRƒ“ƒXƒgƒ‰ƒNƒ^‚Å‚·.
+//      ã‚³ãƒ³ã‚¹ãƒˆãƒ©ã‚¯ã‚¿ã§ã™.
 //-------------------------------------------------------------------------------------------------
 App::App()
-: asdx::Application(L"GTAO", 1920, 1080, nullptr, nullptr, nullptr)
+: asdx::Application(L"Scalable Ambient Obscurance", 1920, 1080, nullptr, nullptr, nullptr)
 {
     m_SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     m_ClearDepth = 0.0f;
 }
 
 //-------------------------------------------------------------------------------------------------
-//      ƒfƒXƒgƒ‰ƒNƒ^‚Å‚·.
+//      ãƒ‡ã‚¹ãƒˆãƒ©ã‚¯ã‚¿ã§ã™.
 //-------------------------------------------------------------------------------------------------
 App::~App()
 { /* DO_NOTHING */ }
 
 //-------------------------------------------------------------------------------------------------
-//      ƒAƒvƒŠƒP[ƒVƒ‡ƒ“ŒÅ—L‚Ì‰Šú‰»ˆ—‚Å‚·.
+//      ã‚¢ãƒ—ãƒªã‚±ãƒ¼ã‚·ãƒ§ãƒ³å›ºæœ‰ã®åˆæœŸåŒ–å‡¦ç†ã§ã™.
 //-------------------------------------------------------------------------------------------------
 bool App::OnInit()
 {
     auto pDevice = asdx::GetD3D12Device();
 
-    // –@üƒoƒbƒtƒ@.
+    // æ³•ç·šãƒãƒƒãƒ•ã‚¡.
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -155,7 +160,94 @@ bool App::OnInit()
         }
     }
 
-    // AOƒoƒbƒtƒ@.
+    // HiZãƒãƒƒãƒ•ã‚¡.
+    {
+        auto w          = m_Width;
+        auto h          = m_Height;
+        auto mipLevels  = 1u;
+        while(true)
+        {
+            w >>= 1;
+            h >>= 1;
+
+            if (w <= 0)
+            { w = 1; }
+            if (h <= 0)
+            { h = 1; }
+
+            if (w == 1 && h == 1)
+            { break; }
+
+            mipLevels++;
+        }
+
+
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width              = m_Width;
+        desc.Height             = m_Height;
+        desc.DepthOrArraySize   = 1;
+        desc.MipLevels          = mipLevels;
+        desc.Format             = DXGI_FORMAT_R32_FLOAT;
+        desc.SampleDesc.Count   = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.Layout             = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        desc.Flags              = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+        D3D12_HEAP_PROPERTIES props = {};
+        props.Type                  = D3D12_HEAP_TYPE_DEFAULT;
+        props.MemoryPoolPreference  = D3D12_MEMORY_POOL_UNKNOWN;
+        props.CPUPageProperty       = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+        props.CreationNodeMask      = 1;
+        props.VisibleNodeMask       = 1;
+       
+        auto hr = pDevice->CreateCommittedResource(
+            &props,
+            D3D12_HEAP_FLAG_NONE,
+            &desc,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            nullptr,
+            IID_PPV_ARGS(m_HiZBuffer.GetAddress()));
+        if (FAILED(hr))
+        {
+            ELOG("Error : ID3D12Device::CreateCommittedResource() Failed. errcode = 0x%x", hr);
+            return false;
+        }
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Format                          = DXGI_FORMAT_R32_FLOAT;
+        srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Texture2D.MipLevels             = mipLevels;
+        srvDesc.Texture2D.MostDetailedMip       = 0;
+        srvDesc.Texture2D.PlaneSlice            = 0;
+        srvDesc.Texture2D.ResourceMinLODClamp   = 0;
+
+        if (!asdx::CreateShaderResourceView(m_HiZBuffer.GetPtr(), &srvDesc, m_HiZSRV.GetAddress()))
+        {
+            ELOG("Error : CreateShaderResourceView() Failed.");
+            return false;
+        }
+
+        m_HiZUAV.resize(mipLevels);
+
+        for(auto i=0u; i<mipLevels; ++i)
+        {
+            D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+            uavDesc.ViewDimension           = D3D12_UAV_DIMENSION_TEXTURE2D;
+            uavDesc.Format                  = DXGI_FORMAT_R32_FLOAT;
+            uavDesc.Texture2D.MipSlice      = i;
+            uavDesc.Texture2D.PlaneSlice    = 0;
+
+            if (!asdx::CreateUnorderedAccessView(m_HiZBuffer.GetPtr(), nullptr, &uavDesc, &m_HiZUAV[i]))
+            {
+                ELOG("Error : CreateUnorderedAccessView() Failed.");
+                return false;
+            }
+        }
+    }
+
+    // AOãƒãƒƒãƒ•ã‚¡.
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -175,7 +267,7 @@ bool App::OnInit()
         }
     }
 
-    // ƒsƒ“ƒ|ƒ“ƒoƒbƒtƒ@.
+    // ãƒ”ãƒ³ãƒãƒ³ãƒãƒƒãƒ•ã‚¡.
     {
         asdx::TargetDesc desc;
         desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -201,7 +293,45 @@ bool App::OnInit()
         }
     }
 
-    // ƒ‹[ƒgƒVƒOƒjƒ`ƒƒ.
+    // ã‚³ãƒ³ãƒ”ãƒ¥ãƒ¼ãƒˆç”¨ãƒ«ãƒ¼ãƒˆã‚·ã‚°ãƒ‹ãƒãƒ£.
+    {
+        D3D12_DESCRIPTOR_RANGE range[2] = {};
+        asdx::RangeSRV(range[0], 0);
+        asdx::RangeUAV(range[1], 0);
+
+        D3D12_ROOT_PARAMETER params[3] = {};
+        asdx::ParamConstants(params[0], D3D12_SHADER_VISIBILITY_ALL, 3, 0);
+        asdx::ParamTable(params[1], D3D12_SHADER_VISIBILITY_ALL, 1, &range[0]);
+        asdx::ParamTable(params[2], D3D12_SHADER_VISIBILITY_ALL, 1, &range[1]);
+
+        D3D12_STATIC_SAMPLER_DESC samplers[] = {
+            asdx::STATIC_SAMPLER_DESC(asdx::SAMPLER_POINT_CLAMP,  D3D12_SHADER_VISIBILITY_ALL, 0)
+        };
+
+        D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;;
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS;
+
+        D3D12_ROOT_SIGNATURE_DESC desc = {};
+        desc.NumParameters      = _countof(params);
+        desc.pParameters        = params;
+        desc.NumStaticSamplers  = _countof(samplers);
+        desc.pStaticSamplers    = samplers;
+        desc.Flags              = flags;
+
+        if (!m_RootSigCS.Init(pDevice, &desc))
+        {
+            ELOG("Error : RootSignature::Init() Failed.");
+            return false;
+        }
+    }
+
+    // ãƒ«ãƒ¼ãƒˆã‚·ã‚°ãƒ‹ãƒãƒ£.
     {
         D3D12_DESCRIPTOR_RANGE range[2] = {};
         asdx::RangeSRV(range[0], 0);
@@ -210,13 +340,13 @@ bool App::OnInit()
         D3D12_ROOT_PARAMETER params[6] = {};
         asdx::ParamCBV      (params[PARAM_INDEX_B0], D3D12_SHADER_VISIBILITY_VERTEX, 0);
         asdx::ParamCBV      (params[PARAM_INDEX_B1], D3D12_SHADER_VISIBILITY_ALL,    1);
-        asdx::ParamCBV      (params[PARAM_INDEX_B2], D3D12_SHADER_VISIBILITY_PIXEL,  2);
-        asdx::ParamConstants(params[PARAM_INDEX_B3], D3D12_SHADER_VISIBILITY_PIXEL,  3, 3);
+        asdx::ParamCBV      (params[PARAM_INDEX_B2], D3D12_SHADER_VISIBILITY_ALL,    2);
+        asdx::ParamConstants(params[PARAM_INDEX_B3], D3D12_SHADER_VISIBILITY_ALL,    3, 3);
         asdx::ParamTable    (params[PARAM_INDEX_T0], D3D12_SHADER_VISIBILITY_PIXEL,  1, &range[0]);
         asdx::ParamTable    (params[PARAM_INDEX_T1], D3D12_SHADER_VISIBILITY_PIXEL,  1, &range[1]);
 
         D3D12_STATIC_SAMPLER_DESC samplers[] = {
-            asdx::STATIC_SAMPLER_DESC(asdx::SAMPLER_POINT_CLAMP, D3D12_SHADER_VISIBILITY_PIXEL, 0),
+            asdx::STATIC_SAMPLER_DESC(asdx::SAMPLER_POINT_CLAMP,  D3D12_SHADER_VISIBILITY_PIXEL, 0),
             asdx::STATIC_SAMPLER_DESC(asdx::SAMPLER_LINEAR_CLAMP, D3D12_SHADER_VISIBILITY_PIXEL, 1)
         };
 
@@ -262,7 +392,7 @@ bool App::OnInit()
     };
 
 
-    // ƒƒbƒVƒ…•`‰æ—pPSO.
+    // ãƒ¡ãƒƒã‚·ãƒ¥æç”»ç”¨PSO.
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
         desc.pRootSignature         = m_RootSig.GetPtr();
@@ -287,12 +417,25 @@ bool App::OnInit()
         }
     }
 
-    // GTAO—pPSO.
+    // HiZç”¨PSO.
+    {
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = m_RootSigCS.GetPtr();
+        desc.CS             = { HiZ_CS, sizeof(HiZ_CS) };
+
+        if (!m_HiZPSO.Init(pDevice, &desc))
+        {
+            ELOG("Error : PipelineState::Init() Failed.");
+            return false;
+        }
+    }
+
+    // ScalableAOç”¨PSO.
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
         desc.pRootSignature         = m_RootSig.GetPtr();
         desc.VS                     = { FullScreenVS, sizeof(FullScreenVS) };
-        desc.PS                     = { GTAO_PS, sizeof(GTAO_PS) };
+        desc.PS                     = { ScalableAO_PS, sizeof(ScalableAO_PS) };
         desc.DepthStencilState      = asdx::DEPTH_STENCIL_DESC(asdx::DEPTH_STATE_NONE);
         desc.RasterizerState        = asdx::RASTERIZER_DESC(asdx::RASTERIZER_STATE_CULL_BACK);
         desc.BlendState             = asdx::BLEND_DESC(asdx::BLEND_STATE_OPAQUE);
@@ -312,7 +455,7 @@ bool App::OnInit()
         }
     }
 
-    // CrossBilateralFilter—pPSO.
+    // CrossBilateralFilterç”¨PSO.
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
         desc.pRootSignature         = m_RootSig.GetPtr();
@@ -337,7 +480,7 @@ bool App::OnInit()
         }
     }
 
-    // ƒRƒs[—pPSO.
+    // ã‚³ãƒ”ãƒ¼ç”¨PSO.
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
         desc.pRootSignature         = m_RootSig.GetPtr();
@@ -380,7 +523,7 @@ bool App::OnInit()
     }
 
     asdx::ResModel model;
-    // ƒ‚ƒfƒ‹“Ç‚İ‚İ.
+    // ãƒ¢ãƒ‡ãƒ«èª­ã¿è¾¼ã¿.
     {
         asdx::MeshLoader loader;
         if (!loader.Load("../res/models/sponza.obj", model))
@@ -390,7 +533,7 @@ bool App::OnInit()
         }
     }
 
-    // ƒ‚ƒfƒ‹‚Ì‰Šú‰».
+    // ãƒ¢ãƒ‡ãƒ«ã®åˆæœŸåŒ–.
     {
         auto meshCount = model.Meshes.size();
         m_Meshes.resize(meshCount);
@@ -401,7 +544,7 @@ bool App::OnInit()
         {
             auto& mesh = model.Meshes[i];
 
-            // ’¸“_ƒoƒbƒtƒ@‚ğ‰Šú‰».
+            // é ‚ç‚¹ãƒãƒƒãƒ•ã‚¡ã‚’åˆæœŸåŒ–.
             {
                 std::vector<MeshVertex> vertices;
                 vertices.resize(mesh.Positions.size());
@@ -435,7 +578,7 @@ bool App::OnInit()
                 m_Meshes[i].VB.Unmap();
             }
 
-            // ƒCƒ“ƒfƒbƒNƒXƒoƒbƒtƒ@‚ğ‰Šú‰».
+            // ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹ãƒãƒƒãƒ•ã‚¡ã‚’åˆæœŸåŒ–.
             {
                 if (!m_Meshes[i].IB.Init(sizeof(uint32_t) * mesh.Indices.size(), false))
                 {
@@ -455,7 +598,7 @@ bool App::OnInit()
                 m_Meshes[i].IB.Unmap();
             }
 
-            // ’è”ƒoƒbƒtƒ@‚ğ‰Šú‰».
+            // å®šæ•°ãƒãƒƒãƒ•ã‚¡ã‚’åˆæœŸåŒ–.
             {
                 auto size = asdx::RoundUp(sizeof(asdx::Matrix), 256);
                 if (!m_Meshes[i].CB.Init(size))
@@ -475,7 +618,7 @@ bool App::OnInit()
             m_Meshes[i].IndexCount = UINT(mesh.Indices.size());
         }
     }
-    // ƒ‚ƒfƒ‹‚Ìƒƒ‚ƒŠ‚ğ‰ğ•ú.
+    // ãƒ¢ãƒ‡ãƒ«ã®ãƒ¡ãƒ¢ãƒªã‚’è§£æ”¾.
     model.Dispose();
 
     auto pos = asdx::Vector3(1000.0f, 100.0f, 0.0f);
@@ -492,7 +635,7 @@ bool App::OnInit()
         m_Width,
         m_Height,
         m_SwapChainFormat,
-        "../res/fonts/07‚â‚³‚µ‚³ƒSƒVƒbƒN.ttf"))
+        "../res/fonts/07ã‚„ã•ã—ã•ã‚´ã‚·ãƒƒã‚¯.ttf"))
     {
         ELOG("Error : GuiMgr::Init() Failed.");
         return false;
@@ -513,7 +656,7 @@ bool App::OnInit()
 }
 
 //-------------------------------------------------------------------------------------------------
-//      ƒAƒvƒŠƒP[ƒVƒ‡ƒ“ŒÅ—L‚ÌI—¹ˆ—‚Å‚·.
+//      ã‚¢ãƒ—ãƒªã‚±ãƒ¼ã‚·ãƒ§ãƒ³å›ºæœ‰ã®çµ‚äº†å‡¦ç†ã§ã™.
 //-------------------------------------------------------------------------------------------------
 void App::OnTerm()
 {
@@ -526,13 +669,29 @@ void App::OnTerm()
         m_Meshes[i].IndexCount = 0;
     }
 
+    for(size_t i=0; i<m_HiZUAV.size(); ++i)
+    {
+        auto pUAV = m_HiZUAV[i];
+        if (pUAV != nullptr)
+        {
+            pUAV->Release();
+            pUAV = nullptr;
+        }
+        m_HiZUAV[i] = nullptr;
+    }
+    m_HiZUAV.clear();
+    m_HiZSRV.Reset();
+    m_HiZBuffer.Reset();
+
     m_Meshes.clear();
 
     m_SimplePSO.Term();
+    m_HiZPSO .Term();
     m_SsaoPSO.Term();
     m_BlurPSO.Term();
     m_CopyPSO.Term();
     m_RootSig.Term();
+    m_RootSigCS.Term();
 
     m_NormalTarget  .Term();
     m_AoTarget      .Term();
@@ -544,7 +703,7 @@ void App::OnTerm()
 }
 
 //-------------------------------------------------------------------------------------------------
-//      ƒtƒŒ[ƒ€‘JˆÚˆ—‚Å‚·.
+//      ãƒ•ãƒ¬ãƒ¼ãƒ é·ç§»å‡¦ç†ã§ã™.
 //-------------------------------------------------------------------------------------------------
 void App::OnFrameMove(asdx::FrameEventArgs& param)
 {
@@ -556,7 +715,7 @@ void App::OnFrameMove(asdx::FrameEventArgs& param)
     auto nearClip   = m_CameraController.GetNearClip();
     auto farClip    = m_CameraController.GetFarClip();
 
-    // ƒV[ƒ“ƒpƒ‰ƒ[ƒ^XV.
+    // ã‚·ãƒ¼ãƒ³ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿æ›´æ–°.
     {
         auto ptr = m_SceneParam.MapAs<SceneParam>();
 
@@ -572,7 +731,7 @@ void App::OnFrameMove(asdx::FrameEventArgs& param)
         m_SceneParam.Unmap();
     }
 
-    // SSAOƒpƒ‰ƒ[ƒ^XV.
+    // SSAOãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿æ›´æ–°.
     {
         float radius = m_Radius;
         float tanHalfFovy = tan(fov * 0.5f);
@@ -582,55 +741,60 @@ void App::OnFrameMove(asdx::FrameEventArgs& param)
         ptr->InvSize.x          = 1.0f / float(m_Width);
         ptr->InvSize.y          = 1.0f / float(m_Height);
         ptr->RadiusScreenSpace  = radius * 0.5f / tanHalfFovy * m_Height;
-        ptr->FalloffRange       = m_FalloffRange;
+        ptr->InvRadius2         = -1.0f / (radius * radius);
+        ptr->Bias               = m_Bias;
+        ptr->Intensity          = m_Intensity;
+        ptr->Sigma              = m_Sigma;
 
         m_SsaoParam.Unmap();
     }
 }
 
 //-------------------------------------------------------------------------------------------------
-//      ƒtƒŒ[ƒ€•`‰æˆ—‚Å‚·.
+//      ãƒ•ãƒ¬ãƒ¼ãƒ æç”»å‡¦ç†ã§ã™.
 //-------------------------------------------------------------------------------------------------
 void App::OnFrameRender(asdx::FrameEventArgs& param)
 {
-    // ƒRƒ}ƒ“ƒh‹L˜^ŠJn.
+    // ã‚³ãƒãƒ³ãƒ‰è¨˜éŒ²é–‹å§‹.
     m_GfxCmdList.Reset();
 
     auto idx  = GetCurrentBackBufferIndex();
     auto pCmd = m_GfxCmdList.GetCommandList();
 
-    // ƒrƒ…[ƒ|[ƒg‚ğİ’è.
+    // ãƒ“ãƒ¥ãƒ¼ãƒãƒ¼ãƒˆã‚’è¨­å®š.
     pCmd->RSSetViewports(1, &m_Viewport);
     pCmd->RSSetScissorRects(1, &m_ScissorRect);
 
-    // ƒ‹[ƒgƒVƒOƒjƒ`ƒƒİ’è.
-    pCmd->SetGraphicsRootSignature(m_RootSig.GetPtr());
-
-    pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     float clearColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-    // G-Buffer ¶¬.
+    // G-Buffer ç”Ÿæˆ.
     {
+        // ãƒ«ãƒ¼ãƒˆã‚·ã‚°ãƒ‹ãƒãƒ£è¨­å®š.
+        pCmd->SetGraphicsRootSignature(m_RootSig.GetPtr());
+    
+        // ãƒˆãƒãƒ­ã‚¸ãƒ¼è¨­å®š.
+        pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
         asdx::ScopedBarrier barrier0(
             pCmd, m_NormalTarget.GetResource(),
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-        // ƒoƒbƒtƒ@‚ğƒNƒŠƒA.
+        // ãƒãƒƒãƒ•ã‚¡ã‚’ã‚¯ãƒªã‚¢.
         m_GfxCmdList.ClearDSV(m_DepthTarget.GetDSV(), m_ClearDepth);
         m_GfxCmdList.ClearRTV(m_NormalTarget.GetRTV(), clearColor);
 
-        // ƒŒƒ“ƒ_[ƒ^[ƒQƒbƒgİ’è.
+        // ãƒ¬ãƒ³ãƒ€ãƒ¼ã‚¿ãƒ¼ã‚²ãƒƒãƒˆè¨­å®š.
         m_GfxCmdList.SetTarget(m_NormalTarget.GetRTV(), m_DepthTarget.GetDSV());
 
-        // ƒpƒCƒvƒ‰ƒCƒ“ƒXƒe[ƒgİ’è.
+        // ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³ã‚¹ãƒ†ãƒ¼ãƒˆè¨­å®š.
         m_GfxCmdList.SetPipelineState(m_SimplePSO.GetPtr());
 
-        // ƒfƒBƒXƒNƒŠƒvƒ^İ’è.
+        // ãƒ‡ã‚£ã‚¹ã‚¯ãƒªãƒ—ã‚¿è¨­å®š.
         m_GfxCmdList.SetCBV(PARAM_INDEX_B1, m_SceneParam.GetView()); 
 
-        // ƒƒbƒVƒ…‚ğ•`‰æ.
+        // ãƒ¡ãƒƒã‚·ãƒ¥ã‚’æç”».
         auto count = m_Meshes.size();
         for(size_t i=0; i<count; ++i)
         {
@@ -646,61 +810,127 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
         }
     }
 
-    // AlchemyAO‚ğ•`‰æ.
+    // HiZç”Ÿæˆ.
     {
         asdx::ScopedBarrier barrier0(
             pCmd, m_DepthTarget.GetResource(),
             D3D12_RESOURCE_STATE_DEPTH_WRITE,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+        asdx::ScopedBarrier barrier1(
+            pCmd, m_HiZBuffer.GetPtr(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        // ãƒ«ãƒ¼ãƒˆã‚·ã‚°ãƒ‹ãƒãƒ£è¨­å®š.
+        pCmd->SetComputeRootSignature(m_RootSigCS.GetPtr());
+
+        // ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³ã‚¹ãƒ†ãƒ¼ãƒˆè¨­å®š.
+        m_GfxCmdList.SetPipelineState(m_HiZPSO.GetPtr());
+
+        auto desc = m_HiZBuffer->GetDesc();
+        UINT w    = UINT(desc.Width);
+        UINT h    = desc.Height;
+        UINT mips = desc.MipLevels;
+
+        struct HiZParam
+        {
+            uint32_t    Width;
+            uint32_t    Height;
+            float       MipLevel;
+            float       Reserved;
+        };
+
+        auto currW = w;
+        auto currH = h;
+        auto pSRV  = m_DepthTarget.GetSRV();
+
+        const uint32_t NUM_THREADS = 8;
+
+        for(uint32_t m=0; m<mips; ++m)
+        {
+            HiZParam param = {};
+            param.Width    = currW;
+            param.Height   = currH;
+            param.MipLevel = float(m);
+
+            auto pUAV = m_HiZUAV[m];
+
+            m_GfxCmdList.SetConstants(0, 3, &param, 0, true);
+            m_GfxCmdList.SetTable(1, pSRV, true);
+            m_GfxCmdList.SetTable(2, pUAV, true);
+
+            uint32_t dispatchX = (currW + (NUM_THREADS - 1)) / NUM_THREADS;
+            uint32_t dispatchY = (currH + (NUM_THREADS - 1)) / NUM_THREADS;
+            m_GfxCmdList.Dispatch(dispatchX, dispatchY, 1);
+
+            currW >>= 1;
+            currH >>= 1;
+
+            if (currW <= 0)
+            { currW = 1; }
+            if (currH <= 0)
+            { currH = 1; }
+
+            pSRV = m_HiZSRV.GetPtr();
+
+            m_GfxCmdList.BarrierUAV(m_HiZBuffer.GetPtr());
+        }
+    }
+
+    // ScalableAOã‚’æç”».
+    {
+        // ãƒ«ãƒ¼ãƒˆã‚·ã‚°ãƒ‹ãƒãƒ£è¨­å®š.
+        pCmd->SetGraphicsRootSignature(m_RootSig.GetPtr());
 
         asdx::ScopedBarrier barrier1(
             pCmd, m_AoTarget.GetResource(),
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-        // ƒoƒbƒtƒ@‚ğƒNƒŠƒA.
+        // ãƒãƒƒãƒ•ã‚¡ã‚’ã‚¯ãƒªã‚¢.
         m_GfxCmdList.ClearRTV(m_AoTarget.GetRTV(), clearColor);
 
-        // ƒŒƒ“ƒ_[ƒ^[ƒQƒbƒgİ’è.
+        // ãƒ¬ãƒ³ãƒ€ãƒ¼ã‚¿ãƒ¼ã‚²ãƒƒãƒˆè¨­å®š.
         m_GfxCmdList.SetTarget(m_AoTarget.GetRTV(), nullptr);
 
-        // ƒpƒCƒvƒ‰ƒCƒ“ƒXƒe[ƒgİ’è.
+        // ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³ã‚¹ãƒ†ãƒ¼ãƒˆè¨­å®š.
         m_GfxCmdList.SetPipelineState(m_SsaoPSO.GetPtr());
 
         auto vbv = m_FullScreenVB.GetView();
         m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
         m_GfxCmdList.SetIndexBuffer(nullptr);
 
-        // ƒfƒBƒXƒNƒŠƒvƒ^İ’è.
+        // ãƒ‡ã‚£ã‚¹ã‚¯ãƒªãƒ—ã‚¿è¨­å®š.
         m_GfxCmdList.SetCBV(PARAM_INDEX_B1, m_SceneParam.GetView());
         m_GfxCmdList.SetCBV(PARAM_INDEX_B2, m_SsaoParam.GetView());
-        m_GfxCmdList.SetTable(PARAM_INDEX_T0, m_DepthTarget.GetSRV());
+        m_GfxCmdList.SetTable(PARAM_INDEX_T0, m_HiZSRV.GetPtr());
         m_GfxCmdList.SetTable(PARAM_INDEX_T1, m_NormalTarget.GetSRV());
         
-        // •`‰æƒLƒbƒN.
+        // æç”»ã‚­ãƒƒã‚¯.
         m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
     }
 
     auto blurSharpness = m_BlurSharpenss;
 
-    //@…•½ƒuƒ‰[.
+    //ã€€æ°´å¹³ãƒ–ãƒ©ãƒ¼.
     {
         asdx::ScopedBarrier barrier(
             pCmd, m_BlurTarget0.GetResource(),
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-        // ƒŒƒ“ƒ_[ƒ^[ƒQƒbƒgİ’è.
+        // ãƒ¬ãƒ³ãƒ€ãƒ¼ã‚¿ãƒ¼ã‚²ãƒƒãƒˆè¨­å®š.
         m_GfxCmdList.SetTarget(m_BlurTarget0.GetRTV(), nullptr);
 
-        // ƒpƒCƒvƒ‰ƒCƒ“ƒXƒe[ƒgİ’è.
+        // ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³ã‚¹ãƒ†ãƒ¼ãƒˆè¨­å®š.
         m_GfxCmdList.SetPipelineState(m_BlurPSO.GetPtr());
 
         auto vbv = m_FullScreenVB.GetView();
         m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
         m_GfxCmdList.SetIndexBuffer(nullptr);
 
-        // ƒfƒBƒXƒNƒŠƒvƒ^İ’è.
+        // ãƒ‡ã‚£ã‚¹ã‚¯ãƒªãƒ—ã‚¿è¨­å®š.
         float param[3] = {
             1.0f / float(m_Width),
             0.0f,
@@ -710,28 +940,28 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
         m_GfxCmdList.SetTable(PARAM_INDEX_T0, m_DepthTarget.GetSRV());
         m_GfxCmdList.SetTable(PARAM_INDEX_T1, m_AoTarget.GetSRV());
 
-        // •`‰æƒLƒbƒN.
+        // æç”»ã‚­ãƒƒã‚¯.
         m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
     }
 
-    //@‚’¼ƒuƒ‰[.
+    //ã€€å‚ç›´ãƒ–ãƒ©ãƒ¼.
     {
         asdx::ScopedBarrier barrier(
             pCmd, m_BlurTarget1.GetResource(),
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-        // ƒŒƒ“ƒ_[ƒ^[ƒQƒbƒgİ’è.
+        // ãƒ¬ãƒ³ãƒ€ãƒ¼ã‚¿ãƒ¼ã‚²ãƒƒãƒˆè¨­å®š.
         m_GfxCmdList.SetTarget(m_BlurTarget1.GetRTV(), nullptr);
 
-        // ƒpƒCƒvƒ‰ƒCƒ“ƒXƒe[ƒgİ’è.
+        // ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³ã‚¹ãƒ†ãƒ¼ãƒˆè¨­å®š.
         m_GfxCmdList.SetPipelineState(m_BlurPSO.GetPtr());
 
         auto vbv = m_FullScreenVB.GetView();
         m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
         m_GfxCmdList.SetIndexBuffer(nullptr);
 
-        // ƒfƒBƒXƒNƒŠƒvƒ^İ’è.
+        // ãƒ‡ã‚£ã‚¹ã‚¯ãƒªãƒ—ã‚¿è¨­å®š.
         float param[3] = {
             0.0f,
             1.0f / float(m_Height),
@@ -741,23 +971,23 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
         m_GfxCmdList.SetTable(PARAM_INDEX_T0, m_DepthTarget.GetSRV());
         m_GfxCmdList.SetTable(PARAM_INDEX_T1, m_BlurTarget0.GetSRV());
 
-        // •`‰æƒLƒbƒN.
+        // æç”»ã‚­ãƒƒã‚¯.
         m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
     }
 
-    // ƒJƒ‰[ƒoƒbƒtƒ@.
+    // ã‚«ãƒ©ãƒ¼ãƒãƒƒãƒ•ã‚¡.
     {
         asdx::ScopedBarrier barrier(
             pCmd, m_ColorTarget[idx].GetResource(),
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-        // ƒoƒbƒtƒ@‚ğƒNƒŠƒA.
+        // ãƒãƒƒãƒ•ã‚¡ã‚’ã‚¯ãƒªã‚¢.
         m_GfxCmdList.ClearRTV(m_ColorTarget[idx].GetRTV(), clearColor);
 
         m_GfxCmdList.SetTarget(m_ColorTarget[idx].GetRTV(), nullptr);
 
-        // ƒpƒCƒvƒ‰ƒCƒ“ƒXƒe[ƒgİ’è.
+        // ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³ã‚¹ãƒ†ãƒ¼ãƒˆè¨­å®š.
         m_GfxCmdList.SetPipelineState(m_CopyPSO.GetPtr());
         m_GfxCmdList.SetTable(PARAM_INDEX_T0, m_BlurTarget1.GetSRV());
 
@@ -765,45 +995,47 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
         m_GfxCmdList.SetVertexBuffers(0, 1, &vbv);
         m_GfxCmdList.SetIndexBuffer(nullptr);
 
-        // •`‰æƒLƒbƒN.
+        // æç”»ã‚­ãƒƒã‚¯.
         m_GfxCmdList.DrawInstanced(3, 1, 0, 0);
 
         asdx::GuiMgr::Instance().Update(m_Width, m_Height);
-        ImGui::SetNextWindowSize(ImVec2(200, 100), ImGuiCond_Once);
-        if (ImGui::Begin(u8"SSAO ƒpƒ‰ƒ[ƒ^"))
+        ImGui::SetNextWindowSize(ImVec2(240, 140), ImGuiCond_Once);
+        if (ImGui::Begin(u8"SSAO ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿"))
         {
-            ImGui::DragFloat(u8"”¼Œa", &m_Radius, 0.1f, 0.0f, 1000.0f, "%.2f");
-            ImGui::DragFloat(u8"Œ¸­”ÍˆÍ", &m_FalloffRange, 0.001f, 0.0f, 1.0f, "%.3f");
-            ImGui::DragFloat(u8"‘N–¾“x", &m_BlurSharpenss, 1.0f, 0.1f, 10000.0f, "%.2f");
+            ImGui::DragFloat(u8"åŠå¾„", &m_Radius, 0.1f, 0.0f, 1000.0f, "%.2f");
+            ImGui::DragFloat(u8"å¼·åº¦", &m_Intensity, 0.1f, 0.0f, 1000.0f, "%.2f");
+            ImGui::DragFloat(u8"ãƒã‚¤ã‚¢ã‚¹", &m_Bias, 0.01f, -1000.0f, 1000.0f, "%.2f");
+            ImGui::DragFloat(u8"AOä¿‚æ•°", &m_Sigma, 0.1f, 0.0f, 1000.0f, "%.2f");
+            ImGui::DragFloat(u8"é®®æ˜åº¦", &m_BlurSharpenss, 1.0f, 0.1f, 10000.0f, "%.2f");
             ImGui::End();
         }
         asdx::GuiMgr::Instance().Draw(pCmd);
     }
 
-    // ƒRƒ}ƒ“ƒh‹L˜^I—¹.
+    // ã‚³ãƒãƒ³ãƒ‰è¨˜éŒ²çµ‚äº†.
     m_GfxCmdList.Close();
 
     auto pQueue = asdx::GetGraphicsQueue();
 
-    // ‘OƒtƒŒ[ƒ€‚ÌƒRƒ}ƒ“ƒh‚ªI—¹‚µ‚Ä‚¢‚È‚¯‚ê‚Î‘Ò‹@.
+    // å‰ãƒ•ãƒ¬ãƒ¼ãƒ ã®ã‚³ãƒãƒ³ãƒ‰ãŒçµ‚äº†ã—ã¦ã„ãªã‘ã‚Œã°å¾…æ©Ÿ.
     pQueue->Sync(m_WaitPoint);
 
     ID3D12CommandList* pLists[] = {
         pCmd
     };
 
-    // ƒRƒ}ƒ“ƒhÀs.
+    // ã‚³ãƒãƒ³ãƒ‰å®Ÿè¡Œ.
     pQueue->Execute(_countof(pLists), pLists);
 
-    // ‘Ò‹@“_‚ğ‹L˜^.
+    // å¾…æ©Ÿç‚¹ã‚’è¨˜éŒ².
     m_WaitPoint = pQueue->Signal();
     
-    // ‰æ–Ê‚É•\¦.
+    // ç”»é¢ã«è¡¨ç¤º.
     Present( 0 );
 }
 
 //-------------------------------------------------------------------------------------------------
-//      ƒŠƒTƒCƒY‚Ìˆ—‚Å‚·.
+//      ãƒªã‚µã‚¤ã‚ºæ™‚ã®å‡¦ç†ã§ã™.
 //-------------------------------------------------------------------------------------------------
 void App::OnResize(const asdx::ResizeEventArgs& param)
 {
@@ -814,7 +1046,7 @@ void App::OnResize(const asdx::ResizeEventArgs& param)
 }
 
 //-----------------------------------------------------------------------------
-//      ƒ}ƒEƒX‚Ìˆ—‚Å‚·.
+//      ãƒã‚¦ã‚¹ã®å‡¦ç†ã§ã™.
 //-----------------------------------------------------------------------------
 void App::OnMouse(const asdx::MouseEventArgs& param)
 {
@@ -843,7 +1075,7 @@ void App::OnMouse(const asdx::MouseEventArgs& param)
 }
 
 //-----------------------------------------------------------------------------
-//      ƒL[‚Ìˆ—‚Å‚·.
+//      ã‚­ãƒ¼ã®å‡¦ç†ã§ã™.
 //-----------------------------------------------------------------------------
 void App::OnKey(const asdx::KeyEventArgs& param)
 {
@@ -852,7 +1084,7 @@ void App::OnKey(const asdx::KeyEventArgs& param)
 }
 
 //-----------------------------------------------------------------------------
-//      ƒ^ƒCƒsƒ“ƒOˆ—‚Å‚·.
+//      ã‚¿ã‚¤ãƒ”ãƒ³ã‚°å‡¦ç†ã§ã™.
 //-----------------------------------------------------------------------------
 void App::OnTyping(uint32_t code)
 {
