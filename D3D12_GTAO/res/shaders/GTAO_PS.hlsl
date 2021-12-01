@@ -28,7 +28,7 @@ struct GTAOParam
 {
     float2  InvSize;        // レンダーターゲットサイズの逆数.
     float   RadiusSS;       // スクリーン空間の半径.
-    float   FalloffRange;   // フォールオフ範囲.
+    float   RadiusVS;       // ビュー空間の半径.
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -131,6 +131,10 @@ float2 R2Sequence(float number)
     return frac(0.5f.xx + number * float2(0.75487766624669276005, 0.5698402909980532659114));
 }
 
+//-------------------------------------------------------------------------
+float Pow2(float x)
+{ return x * x; }
+
 //-----------------------------------------------------------------------------
 //      エントリーポイントです.
 //-----------------------------------------------------------------------------
@@ -163,12 +167,7 @@ float main(const VSOutput input) : SV_TARGET0
 
     const float pixelTooCloseThreshold  = 1.3f;
     const float minS = pixelTooCloseThreshold / radiusPixels;
-
-    const float falloffRange    = radiusPixels * Param.FalloffRange;
-    const float falloffFrom     = radiusPixels * (1 - Param.FalloffRange);
-    const float falloffMul      = -1.0 / falloffRange;
-    const float falloffAdd      = SaturateFloat(falloffFrom / falloffRange) + 1.0;
-
+    const float invRadius = 1.0f / Pow2(Param.RadiusVS);
 
     [unroll]
     for(float slice = 0; slice < SLICE_COUNT; ++slice)
@@ -181,7 +180,7 @@ float main(const VSOutput input) : SV_TARGET0
         float2 omega = float2(cosPhi, -sinPhi) * radiusPixels;
 
         const float3 dir         = float3(cosPhi, sinPhi, 0);
-        const float3 orthoDir    = dir - (dot(dir, view) * view);
+        const float3 orthoDir    = dir - dot(dir, view) * view;
         const float3 axisV       = normalize(cross(orthoDir, view));
         const float3 projN       = n0 - axisV * dot(n0, axisV);
         const float  projNLength = length(projN);
@@ -192,18 +191,17 @@ float main(const VSOutput input) : SV_TARGET0
         float g    = sgnG * acos(cosG);
         float sinG = sin(g);
 
-        const float lowHorizonCos0 = cos(g - HALF_PI);
-        const float lowHorizonCos1 = cos(g + HALF_PI);
-
-        float horizonCos0 = lowHorizonCos0;
-        float horizonCos1 = lowHorizonCos1;
+        float horizonCos0 = -1.0f;
+        float horizonCos1 = -1.0f;
 
         [unroll]
         for(float step = 0; step < STEP_COUNT; ++step)
         {
             float stepNoise = R1Sequence(slice + step * STEP_COUNT);
             stepNoise = frac(stepNoise + noise.y);
-            float s = (step + stepNoise) / float(STEP_COUNT) + minS;
+            float s = (step + stepNoise) / float(STEP_COUNT);
+            s = Pow2(s);
+            s += minS;
 
             // hat_t(phi) * r.
             float2 offset = round(s * omega) * Param.InvSize;
@@ -220,25 +218,23 @@ float main(const VSOutput input) : SV_TARGET0
             float3 diff1 = pos1 - p0;
 
             // 距離.
-            float dist0 = length(diff0);
-            float dist1 = length(diff1);
+            float dist0 = dot(diff0, diff0);
+            float dist1 = dot(diff1, diff1);
 
             // ベクトル正規化.
-            float3 horizonV0 = diff0 / dist0;
-            float3 horizonV1 = diff1 / dist1;
+            float3 horizonV0 = diff0 * rsqrt(dist0);
+            float3 horizonV1 = diff1 * rsqrt(dist1);
 
             // 水平角をサンプル.
             float cos0 = dot(horizonV0, view);
             float cos1 = dot(horizonV1, view);
 
-            float weight0 = saturate(mad(dist0, falloffMul, falloffAdd));
-            float weight1 = saturate(mad(dist1, falloffMul, falloffAdd));
+            // 距離で減衰させる
+            float falloff0 = dist0 * invRadius;
+            float falloff1 = dist1 * invRadius;
 
-            cos0 = lerp(lowHorizonCos0, cos0, weight0);
-            cos1 = lerp(lowHorizonCos1, cos1, weight1);
-
-            horizonCos0 = max(horizonCos0, cos0);
-            horizonCos1 = max(horizonCos1, cos1);
+            horizonCos0 = max(horizonCos0, cos0 - falloff0);
+            horizonCos1 = max(horizonCos1, cos1 - falloff1);
         }
 
         // Equation(10).

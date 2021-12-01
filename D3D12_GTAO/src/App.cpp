@@ -75,7 +75,7 @@ struct SsaoParam
 {
     asdx::Vector2   InvSize;
     float           RadiusScreenSpace;
-    float           FalloffRange;
+    float           RadiusViewSpace;
 };
 
 static const D3D12_INPUT_ELEMENT_DESC g_InputElements[] = {
@@ -582,7 +582,7 @@ void App::OnFrameMove(asdx::FrameEventArgs& param)
         ptr->InvSize.x          = 1.0f / float(m_Width);
         ptr->InvSize.y          = 1.0f / float(m_Height);
         ptr->RadiusScreenSpace  = radius * 0.5f / tanHalfFovy * m_Height;
-        ptr->FalloffRange       = m_FalloffRange;
+        ptr->RadiusViewSpace    = radius;;
 
         m_SsaoParam.Unmap();
     }
@@ -773,7 +773,6 @@ void App::OnFrameRender(asdx::FrameEventArgs& param)
         if (ImGui::Begin(u8"SSAO パラメータ"))
         {
             ImGui::DragFloat(u8"半径", &m_Radius, 0.1f, 0.0f, 1000.0f, "%.2f");
-            ImGui::DragFloat(u8"減少範囲", &m_FalloffRange, 0.001f, 0.0f, 1.0f, "%.3f");
             ImGui::DragFloat(u8"鮮明度", &m_BlurSharpenss, 1.0f, 0.1f, 10000.0f, "%.2f");
             ImGui::End();
         }

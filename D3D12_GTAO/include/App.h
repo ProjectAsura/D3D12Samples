@@ -87,7 +87,6 @@ private:
     asdx::CameraController  m_CameraController;
 
     float m_Radius          = 20.0f;
-    float m_FalloffRange    = 0.1f;
     float m_BlurSharpenss   = 1.0f;
 
     //=============================================================================================
