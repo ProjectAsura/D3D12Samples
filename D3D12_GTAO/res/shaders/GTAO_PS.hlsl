@@ -179,18 +179,6 @@ float main(const VSOutput input) : SV_TARGET0
         sincos(phi, sinPhi, cosPhi);
         float2 omega = float2(cosPhi, -sinPhi) * radiusPixels;
 
-        const float3 dir         = float3(cosPhi, sinPhi, 0);
-        const float3 orthoDir    = dir - dot(dir, view) * view;
-        const float3 axisV       = normalize(cross(orthoDir, view));
-        const float3 projN       = n0 - axisV * dot(n0, axisV);
-        const float  projNLength = length(projN);
-
-        // gammaÇãÅÇﬂÇÈ.
-        float sgnG = (float)sign(dot(orthoDir, projN));
-        float cosG = saturate(dot(projN, view) / projNLength);
-        float g    = sgnG * acos(cosG);
-        float sinG = sin(g);
-
         float horizonCos0 = -1.0f;
         float horizonCos1 = -1.0f;
 
@@ -200,7 +188,7 @@ float main(const VSOutput input) : SV_TARGET0
             float stepNoise = R1Sequence(slice + step * STEP_COUNT);
             stepNoise = frac(stepNoise + noise.y);
             float s = (step + stepNoise) / float(STEP_COUNT);
-            s = Pow2(s);
+            s = Pow2(s); // Ç±ÇÍì¸ÇÍÇÈÇ∆ämÇ©Ç…ÇøÇÂÇ¡Ç∆ó«Ç≠Ç»Ç¡ÇΩ.
             s += minS;
 
             // hat_t(phi) * r.
@@ -229,7 +217,7 @@ float main(const VSOutput input) : SV_TARGET0
             float cos0 = dot(horizonV0, view);
             float cos1 = dot(horizonV1, view);
 
-            // ãóó£Ç≈å∏êäÇ≥ÇπÇÈ
+            // ãóó£Ç≈å∏êäÇ≥ÇπÅCÇ†Ç‹ÇËÇ…Ç‡âìÇ≠ÇÃÇ‡ÇÃÇ™AOÇ…äÒó^ÇµÇ»Ç¢ÇÊÇ§Ç…Ç∑ÇÈ.
             float falloff0 = dist0 * invRadius;
             float falloff1 = dist1 * invRadius;
 
@@ -237,17 +225,30 @@ float main(const VSOutput input) : SV_TARGET0
             horizonCos1 = max(horizonCos1, cos1 - falloff1);
         }
 
+        const float3 dir         = float3(cosPhi, sinPhi, 0);
+        const float3 orthoDir    = dir - dot(dir, view) * view;
+        const float3 axisV       = normalize(cross(orthoDir, view));
+        const float3 projN       = n0 - axisV * dot(n0, axisV);
+        const float  projNLength = length(projN);
+
+        // gammaÇãÅÇﬂÇÈ.
+        float sgnGamma = (float)sign(dot(orthoDir, projN));
+        float cosGamma = saturate(dot(projN, view) / projNLength);
+        float gamma    = sgnGamma * acos(cosGamma);
+        float sinGamma = sin(gamma);
+
         // Equation(10).
-        float t0 = -acos(horizonCos0);
-        float t1 =  acos(horizonCos1);
+        float theta0 = -acos(horizonCos0);
+        float theta1 =  acos(horizonCos1);
 
         // îºãÖè„Ç…êßå¿.
-        t0 = g + clamp(t0 - g, -HALF_PI, HALF_PI);
-        t1 = g + clamp(t1 - g, -HALF_PI, HALF_PI);
+        theta0 = gamma + clamp(theta0 - gamma, -HALF_PI, HALF_PI);
+        theta1 = gamma + clamp(theta1 - gamma, -HALF_PI, HALF_PI);
 
         // Equation(7).
-        float hat_a = (cosG + 2 * t0 * sinG - cos(2 * t0 - g)) * 0.25f
-                    + (cosG + 2 * t1 * sinG - cos(2 * t1 - g)) * 0.25f;
+        float hat_a = (-cos(2.0 * theta0 - gamma) + cosGamma + 2.0 * theta0 * sinGamma )
+                    + (-cos(2.0 * theta1 - gamma) + cosGamma + 2.0 * theta1 * sinGamma );
+        hat_a *= 0.25f; // 1/4î{.
 
         // Equation(9).
         visibility += projNLength * hat_a;
