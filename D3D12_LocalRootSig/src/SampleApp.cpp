@@ -8,9 +8,9 @@
 // Includes
 //-----------------------------------------------------------------------------
 #include <SampleApp.h>
-#include <asdxLogger.h>
-#include <asdxCmdHelper.h>
-#include <asdxMisc.h>
+#include <fnd/asdxLogger.h>
+#include <fnd/asdxMisc.h>
+#include <gfx/asdxSampler.h>
 
 
 namespace {
@@ -67,8 +67,8 @@ SampleApp::~SampleApp()
 //-----------------------------------------------------------------------------
 bool SampleApp::OnInit()
 {
-    auto pDevice = asdx::GfxDevice().GetDevice();
-    m_pGraphicsQueue = asdx::GfxDevice().GetGraphicsQueue();
+    auto pDevice = asdx::GetD3D12Device();
+    m_pGraphicsQueue = asdx::GetGraphicsQueue();
 
     // DXRがサポートされているかどうかチェック.
     if (!asdx::IsSupportDXR(pDevice))
@@ -76,6 +76,15 @@ bool SampleApp::OnInit()
         ELOGA("Error : DXR Unsupported.");
         return false;
     }
+
+    asdx::CommandList setupCommandList;
+    if (!setupCommandList.Init(pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT))
+    {
+        ELOGA("Error : CommandList::Init() Failed.");
+        return false;
+    }
+
+    setupCommandList.Reset();
 
     // 背景画像のロード.
     {
@@ -91,19 +100,19 @@ bool SampleApp::OnInit()
         asdx::ResTexture res;
         if (!res.LoadFromFileA(path.c_str()))
         {
-            res.Release();
+            res.Dispose();
             ELOGA("Error : File Load Failed. path = %s", path.c_str());
             return false;
         }
 
-        if (!m_BackGround.Init(res))
+        if (!m_BackGround.Init(setupCommandList, res))
         {
-            res.Release();
+            res.Dispose();
             ELOGA("Error : Texture::Init() Failed.");
             return false;
         }
 
-        res.Release();
+        res.Dispose();
     }
 
     // ベースカラーマップのロード.
@@ -125,19 +134,19 @@ bool SampleApp::OnInit()
             asdx::ResTexture res;
             if (!res.LoadFromFileA(path.c_str()))
             {
-                res.Release();
+                res.Dispose();
                 ELOGA("Error : File Load Failed. path = %s", path.c_str());
                 return false;
             }
 
-            if (!m_BaseColor[i].Init(res))
+            if (!m_BaseColor[i].Init(setupCommandList, res))
             {
-                res.Release();
+                res.Dispose();
                 ELOGA("Error : Texture::Init() Failed.");
                 return false;
             }
 
-            res.Release();
+            res.Dispose();
         }
     }
 
@@ -284,16 +293,16 @@ bool SampleApp::OnInit()
 
     // グローバルルートシグニチャの生成.
     {
-        asdx::RootSignatureDesc desc;
-        desc.AddTableUAV("RenderTarget", asdx::SV_ALL, 0);
-        desc.AddTableSRV("BackGround",   asdx::SV_ALL, 1);
-        desc.AddSRV("Scene",        asdx::SV_ALL, 0);
-        desc.AddSRV("Vertices",     asdx::SV_ALL, 2);
-        desc.AddSRV("Indices",      asdx::SV_ALL, 3);
-        desc.AddCBV("SceneParam",   asdx::SV_ALL, 0);
-        desc.AddStaticSampler(asdx::SV_ALL, asdx::SST_LINEAR_WRAP, 0);
+        asdx::DescriptorSetLayout<6, 1> layout;
+        layout.SetTableUAV(0, asdx::SV_ALL, 0);
+        layout.SetTableSRV(1, asdx::SV_ALL, 1);
+        layout.SetSRV(2, asdx::SV_ALL, 0);
+        layout.SetSRV(3, asdx::SV_ALL, 2);
+        layout.SetSRV(4, asdx::SV_ALL, 3);
+        layout.SetCBV(5, asdx::SV_ALL, 0);
+        layout.SetStaticSampler(0, asdx::SV_ALL, asdx::STATIC_SAMPLER_LINEAR_WRAP, 0);
 
-        if (!m_GlobalRootSig.Init(pDevice, desc))
+        if (!m_GlobalRootSig.Init(pDevice, layout.GetDesc()))
         {
             ELOGA("Error : RootSignature::Init() Failed");
             return false;
@@ -303,11 +312,11 @@ bool SampleApp::OnInit()
     // ローカルルートシグニチャの生成. 
     // シェーダテーブルごとに異なるものをはこちらで設定する.
     {
-        asdx::RootSignatureDesc desc;
-        desc.SetFlag(D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
-        desc.AddTable("BaseColor", asdx::SV_ALL, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, 0);
+        asdx::DescriptorSetLayout<1, 0> layout;
+        layout.SetTableSRV(0, asdx::SV_ALL, 4);
+        layout.SetFlags(D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
-        if (!m_LocalRootSig.Init(pDevice, desc))
+        if (!m_LocalRootSig.Init(pDevice, layout.GetDesc()))
         {
             ELOGA("Error : RootSignature::Init() Failed.");
             return false;
@@ -316,8 +325,6 @@ bool SampleApp::OnInit()
 
     // ステートオブジェクトの生成.
     {
-        asdx::SubObjects subObjects;
-
         D3D12_EXPORT_DESC exports[4] = {
             { L"OnGenerateRay", nullptr, D3D12_EXPORT_FLAG_NONE },
             { L"OnClosestHit1", nullptr, D3D12_EXPORT_FLAG_NONE },
@@ -325,79 +332,49 @@ bool SampleApp::OnInit()
             { L"OnMiss",        nullptr, D3D12_EXPORT_FLAG_NONE },
         };
 
-        // グローバルルートシグニチャの設定.
-        D3D12_GLOBAL_ROOT_SIGNATURE globalRootSig = {};
-        globalRootSig.pGlobalRootSignature = m_GlobalRootSig.GetPtr();
-        subObjects.Push(&globalRootSig);
-
-        // ローカルルートシグニチャの設定.
-        D3D12_LOCAL_ROOT_SIGNATURE localRootSig = {};
-        localRootSig.pLocalRootSignature = m_LocalRootSig.GetPtr();
-        subObjects.Push(&localRootSig);
-
-        // DXILライブラリの設定.
-        D3D12_DXIL_LIBRARY_DESC dxilLib = {};
-        dxilLib.DXILLibrary = { SampleRT, sizeof(SampleRT) };
-        dxilLib.NumExports  = _countof(exports);
-        dxilLib.pExports    = exports;
-        subObjects.Push(&dxilLib);
-
         // ヒットグループ1の設定.
-        D3D12_HIT_GROUP_DESC hitGroup = {};
-        hitGroup.ClosestHitShaderImport = L"OnClosestHit1";
-        hitGroup.HitGroupExport         = L"HitGroup1";
-        hitGroup.Type                   = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-        subObjects.Push(&hitGroup);
+        D3D12_HIT_GROUP_DESC hitGroups[2] = {};
+        hitGroups[0].ClosestHitShaderImport = L"OnClosestHit1";
+        hitGroups[0].HitGroupExport         = L"HitGroup1";
+        hitGroups[0].Type                   = D3D12_HIT_GROUP_TYPE_TRIANGLES;
 
         // ヒットグループ2の設定.
-        D3D12_HIT_GROUP_DESC hitGroup2 = {};
-        hitGroup2.ClosestHitShaderImport = L"OnClosestHit2";
-        hitGroup2.HitGroupExport         = L"HitGroup2";
-        hitGroup2.Type                   = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-        subObjects.Push(&hitGroup2);
+        hitGroups[1].ClosestHitShaderImport = L"OnClosestHit2";
+        hitGroups[1].HitGroupExport         = L"HitGroup2";
+        hitGroups[1].Type                   = D3D12_HIT_GROUP_TYPE_TRIANGLES;
 
-        // シェーダ設定.
-        D3D12_RAYTRACING_SHADER_CONFIG shaderConfig = {};
-        shaderConfig.MaxPayloadSizeInBytes   = sizeof(asdx::Vector4) + sizeof(asdx::Vector3);
-        shaderConfig.MaxAttributeSizeInBytes = sizeof(asdx::Vector2);
-        subObjects.Push(&shaderConfig);
+        asdx::RayTracingPipelineStateDesc desc = {};
+        desc.pGlobalRootSignature   = m_GlobalRootSig.GetPtr();
+        desc.pLocalRootSignature    = m_LocalRootSig.GetPtr();
+        desc.DXILLibrary            = { SampleRT, sizeof(SampleRT) };
+        desc.ExportCount            = _countof(exports);
+        desc.pExports               = exports;
+        desc.HitGroupCount          = _countof(hitGroups);
+        desc.pHitGroups             = hitGroups;
+        desc.MaxPayloadSize         = sizeof(asdx::Vector4) + sizeof(asdx::Vector3);
+        desc.MaxAttributeSize       = sizeof(asdx::Vector2);
+        desc.MaxTraceRecursionDepth = 1;
 
-        // パイプライン設定.
-        D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfig = {};
-        pipelineConfig.MaxTraceRecursionDepth = 1;
-        subObjects.Push(&pipelineConfig);
-
-        // ステート設定取得.
-        auto desc = subObjects.GetDesc();
-
-        // ステートオブジェクトを生成.
-        auto hr = pDevice->CreateStateObject(&desc, IID_PPV_ARGS(m_StateObject.GetAddress()));
-        if (FAILED(hr))
+        if (!m_RayTracingPSO.Init(pDevice, desc))
         {
-            ELOGA("Error : ID3D12Device::CreateStateObject() Failed. errcode = 0x%x", hr);
+            ELOGA("Error : RayTracingPipelineState::Init() Failed.");
             return false;
         }
     }
 
     // 高速化機構のビルド.
     {
-        asdx::CommandList commandList;
-        if (!commandList.Init(pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT))
-        {
-            ELOGA("Error : CommandList::Init() Failed.");
-            return false;
-        }
-
-        auto pCmd = commandList.Reset();
-
-        asdx::GfxDevice().SetUploadCommand(pCmd);
+        auto pCmd = setupCommandList.GetCommandList();
 
         m_BLAS.Build(pCmd);
         m_TLAS.Build(pCmd);
+    }
 
-        pCmd->Close();
+    // セットアップコマンド実行.
+    {
+        setupCommandList.Close();
         ID3D12CommandList* pCmds[] = {
-            pCmd
+            setupCommandList.GetCommandList()
         };
 
         // コマンドを実行.
@@ -410,23 +387,15 @@ bool SampleApp::OnInit()
         m_pGraphicsQueue->Sync(m_FrameWaitPoint);
 
         // コマンドリスト破棄.
-        commandList.Term();
+        setupCommandList.Term();
     }
 
     // シェーダテーブルの生成.
     {
-        asdx::RefPtr<ID3D12StateObjectProperties> props;
-        auto hr = m_StateObject->QueryInterface(IID_PPV_ARGS(props.GetAddress()));
-        if (FAILED(hr))
-        {
-            ELOGA("Error : ID3D12StateObject::QueryInteface() Failed. errcode = 0x%x", hr);
-            return false;
-        }
-
         // レイ生成シェーダテーブル.
         {
             asdx::ShaderRecord record;
-            record.ShaderIdentifier = props->GetShaderIdentifier(L"OnGenerateRay");
+            record.ShaderIdentifier = m_RayTracingPSO.GetShaderIdentifier(L"OnGenerateRay");
 
             asdx::ShaderTable::Desc desc;
             desc.RecordCount    = 1;
@@ -442,7 +411,7 @@ bool SampleApp::OnInit()
         // ミスシェーダテーブル.
         {
             asdx::ShaderRecord record;
-            record.ShaderIdentifier = props->GetShaderIdentifier(L"OnMiss");
+            record.ShaderIdentifier = m_RayTracingPSO.GetShaderIdentifier(L"OnMiss");
 
             asdx::ShaderTable::Desc desc;
             desc.RecordCount    = 1;
@@ -470,10 +439,10 @@ bool SampleApp::OnInit()
             // シェーダとテクスチャをそれぞれ別割り当てする.
             asdx::ShaderRecord record[kGeometryCount];
 
-            record[0].ShaderIdentifier   = props->GetShaderIdentifier(L"HitGroup1");
+            record[0].ShaderIdentifier   = m_RayTracingPSO.GetShaderIdentifier(L"HitGroup1");
             record[0].LocalRootArguments = &param[0];
 
-            record[1].ShaderIdentifier   = props->GetShaderIdentifier(L"HitGroup2");
+            record[1].ShaderIdentifier   = m_RayTracingPSO.GetShaderIdentifier(L"HitGroup2");
             record[1].LocalRootArguments = &param[1];
 
             asdx::ShaderTable::Desc desc;
@@ -499,7 +468,7 @@ void SampleApp::OnTerm()
 {
     m_GlobalRootSig .Term();
     m_LocalRootSig  .Term();
-    m_StateObject   .Reset();
+    m_RayTracingPSO .Term();
     m_VB            .Reset();
     m_IB            .Reset();
     m_TLAS          .Term();
@@ -526,9 +495,7 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& args)
     { return; }
 
     auto idx  = GetCurrentBackBufferIndex();
-    auto pCmd = m_GfxCmdList.Reset();
-
-    asdx::GfxDevice().SetUploadCommand(pCmd);
+    m_GfxCmdList.Reset();
 
     // シーンバッファ更新.
     {
@@ -556,25 +523,19 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& args)
     // レイトレ実行.
     {
         // グローバルルートシグニチャ設定.
-        pCmd->SetComputeRootSignature(m_GlobalRootSig.GetPtr());
+        m_GfxCmdList.SetRootSignature(m_GlobalRootSig.GetPtr(), true);
 
         // ステートオブジェクト設定.
-        pCmd->SetPipelineState1(m_StateObject.GetPtr());
+        m_GfxCmdList.SetStateObject(m_RayTracingPSO.GetStateObject());
 
         // リソースをバインド.
         {
-            auto u0 = m_GlobalRootSig.Find("RenderTarget");
-            auto t0 = m_GlobalRootSig.Find("Scene");
-            auto t1 = m_GlobalRootSig.Find("BackGround");
-            auto t2 = m_GlobalRootSig.Find("Vertices");
-            auto t3 = m_GlobalRootSig.Find("Indices");
-            auto b0 = m_GlobalRootSig.Find("SceneParam");
-            asdx::SetTable(pCmd, u0, m_Canvas     .GetUAV(), true);
-            asdx::SetSRV  (pCmd, t0, m_TLAS  .GetResource(), true);
-            asdx::SetTable(pCmd, t1, m_BackGround.GetView(), true);
-            asdx::SetSRV  (pCmd, t2, m_VB         .GetPtr(), true);
-            asdx::SetSRV  (pCmd, t3, m_IB         .GetPtr(), true);
-            asdx::SetCBV  (pCmd, b0, m_SceneCB   .GetView(), true);
+            m_GfxCmdList.SetTable(0, m_Canvas.GetUAV(), true);
+            m_GfxCmdList.SetTable(1, m_BackGround.GetView(), true);
+            m_GfxCmdList.SetSRV  (2, m_TLAS.GetResource(), true);
+            m_GfxCmdList.SetSRV  (3, m_VB.GetPtr(), true);
+            m_GfxCmdList.SetSRV  (4, m_IB.GetPtr(), true);
+            m_GfxCmdList.SetCBV  (5, m_SceneCB.GetView(), true);
         }
 
         D3D12_DISPATCH_RAYS_DESC desc = {};
@@ -585,23 +546,23 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& args)
         desc.Height                     = m_Canvas.GetDesc().Height;
         desc.Depth                      = 1;
 
-        pCmd->DispatchRays(&desc);
+        m_GfxCmdList.DispatchRays(&desc);
 
         // バリアを張っておく.
-        asdx::BarrierUAV(pCmd, m_Canvas.GetResource());
+        m_GfxCmdList.BarrierUAV(m_Canvas.GetResource());
     }
 
     // レイトレ結果をバックバッファにコピー.
     {
-        asdx::ScopedTransition b0(pCmd, m_Canvas.GetResource(), asdx::STATE_UAV, asdx::STATE_COPY_SRC);
-        asdx::ScopedTransition b1(pCmd, m_ColorTarget[idx].GetResource(), asdx::STATE_PRESENT, asdx::STATE_COPY_DST);
-        pCmd->CopyResource(m_ColorTarget[idx].GetResource(), m_Canvas.GetResource());
+        asdx::ScopedBarrier b0(m_GfxCmdList.GetCommandList(), m_Canvas.GetResource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        asdx::ScopedBarrier b1(m_GfxCmdList.GetCommandList(), m_ColorTarget[idx].GetResource(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
+        m_GfxCmdList.CopyResource(m_ColorTarget[idx].GetResource(), m_Canvas.GetResource());
     }
 
-    pCmd->Close();
+    m_GfxCmdList.Close();
 
     ID3D12CommandList* pCmds[] = {
-        pCmd
+        m_GfxCmdList.GetCommandList()
     };
 
     // 前フレームの描画の完了を待機.
@@ -618,7 +579,7 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& args)
     Present(0);
 
     // フレーム同期.
-    asdx::GfxDevice().FrameSync();
+    asdx::FrameSync();
 }
 
 //-----------------------------------------------------------------------------

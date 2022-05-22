@@ -7,12 +7,13 @@
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-#include <asdxApp.h>
-#include <asdxRayTracing.h>
-#include <asdxGraphicsDevice.h>
-#include <asdxTexture.h>
-#include <asdxConstantBuffer.h>
-#include <asdxRootSignature.h>
+#include <fw/asdxApp.h>
+#include <gfx/asdxRayTracing.h>
+#include <gfx/asdxGraphicsSystem.h>
+#include <gfx/asdxTexture.h>
+#include <gfx/asdxConstantBuffer.h>
+#include <gfx/asdxRootSignature.h>
+#include <gfx/asdxCommandQueue.h>
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -54,7 +55,7 @@ private:
 
     asdx::RootSignature                     m_GlobalRootSig;
     asdx::RootSignature                     m_LocalRootSig;
-    asdx::RefPtr<ID3D12StateObject>         m_StateObject;
+    asdx::RayTracingPipelineState           m_RayTracingPSO;
     asdx::RefPtr<ID3D12Resource>            m_VB;
     asdx::RefPtr<ID3D12Resource>            m_IB;
     asdx::Tlas                              m_TLAS;
