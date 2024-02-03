@@ -7,12 +7,13 @@
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-#include <asdxApp.h>
-#include <asdxCameraController.h>
-#include <asdxModel.h>
-#include <asdxRootSignature.h>
-#include <asdxPipelineState.h>
-#include <asdxConstantBuffer.h>
+#include <fw/asdxApp.h>
+#include <fw/asdxCameraController.h>
+#include <gfx/asdxModel.h>
+#include <gfx/asdxRootSignature.h>
+#include <gfx/asdxPipelineState.h>
+#include <gfx/asdxConstantBuffer.h>
+#include <gfx/asdxFence.h>
 
 
 ///////////////////////////////////////////////////////////////////////////////

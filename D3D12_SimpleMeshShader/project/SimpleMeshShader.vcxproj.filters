@@ -28,11 +28,11 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <DXCTask Include="..\res\shaders\SimpleMS.hlsl">
+    <FxCompile Include="..\res\shaders\SimpleMS.hlsl">
       <Filter>リソース ファイル</Filter>
-    </DXCTask>
-    <DXCTask Include="..\res\shaders\SimplePS.hlsl">
+    </FxCompile>
+    <FxCompile Include="..\res\shaders\SimplePS.hlsl">
       <Filter>リソース ファイル</Filter>
-    </DXCTask>
+    </FxCompile>
   </ItemGroup>
 </Project>

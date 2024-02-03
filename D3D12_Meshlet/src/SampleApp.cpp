@@ -8,10 +8,9 @@
 // Includes
 //-----------------------------------------------------------------------------
 #include <SampleApp.h>
-#include <asdxCmdHelper.h>
-#include <asdxMath.h>
-#include <asdxLogger.h>
-#include <asdxMisc.h>
+#include <fnd/asdxMath.h>
+#include <fnd/asdxLogger.h>
+#include <fnd/asdxMisc.h>
 
 
 namespace {
@@ -86,7 +85,7 @@ SampleApp::~SampleApp()
 //-----------------------------------------------------------------------------
 bool SampleApp::OnInit()
 {
-    m_pGraphicsQueue = asdx::GfxDevice().GetGraphicsQueue();
+    m_pGraphicsQueue = asdx::GetGraphicsQueue();
 
     m_CameraController.Init(asdx::Vector3(0.0f, 0.0f, 2.0f),
         asdx::Vector3(0.0f, 0.0f, 0.0f),
@@ -97,7 +96,7 @@ bool SampleApp::OnInit()
 
     m_CameraController.Present();
 
-    auto pDevice = asdx::GfxDevice().GetDevice();
+    auto pDevice = asdx::GetD3D12Device();
 
     // モデルをロード.
     {
@@ -244,14 +243,14 @@ void SampleApp::OnFrameRender(asdx::FrameEventArgs& param)
     { return; }
 
     auto idx  = GetCurrentBackBufferIndex();
-    auto pCmd = m_GfxCmdList.Reset();
+    m_GfxCmdList.Reset();
+    auto pCmd = m_GfxCmdList.GetCommandList();
 
-    asdx::GfxDevice().SetUploadCommand(pCmd);
     auto pRTV = m_ColorTarget[idx].GetRTV();
     auto pDSV = m_DepthTarget.GetDSV();
 
     // レンダーターゲットに書き込み.
-    {       
+    {
         asdx::ScopedTransition barrier(pCmd, pRTV, asdx::STATE_PRESENT, asdx::STATE_RTV);
 
         asdx::ClearRTV(pCmd, pRTV, m_ClearColor);
