@@ -1011,47 +1011,24 @@ bool App::InitApp()
 
     if (m_GpuUploadHeapSupported)
     {
-        D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout = {};
-        UINT rowCount = 0;
-        UINT64 rowSizeInBytes = 0;
+        D3D12_BOX dstBox = {};
+        dstBox.left     = 0;
+        dstBox.right    = tga.GetWidth();
+        dstBox.top      = 0;
+        dstBox.bottom   = tga.GetHeight();
+        dstBox.front    = 0;
+        dstBox.back     = 1;
 
-        // サブリソースデータ設定.
-        D3D12_SUBRESOURCE_DATA srcData = {};
-        srcData.pData      = tga.GetPixels();
-        srcData.RowPitch   = LONG_PTR(tga.GetWidth() * tga.GetBitPerPixel() / 8);
-        srcData.SlicePitch = LONG_PTR(srcData.RowPitch * tga.GetHeight());
+        uint32_t    srcRowPitch   = tga.GetWidth () * (tga.GetBitPerPixel() / 8);
+        uint32_t    srcDepthPitch = tga.GetHeight() * srcRowPitch;
+        const void* srcPtr        = tga.GetPixels();
 
-        UINT64 requiredSize = 0;
-        m_pDevice->GetCopyableFootprints(&desc, 0, 1, 0, &layout, &rowCount, &rowSizeInBytes, &requiredSize);
-
-        BYTE* pData = nullptr;
-        hr = m_pTexture->Map(0, nullptr, reinterpret_cast<void**>(&pData));
+        hr = m_pTexture->WriteToSubresource(0, &dstBox, srcPtr, srcRowPitch, srcDepthPitch);
         if (FAILED(hr))
         {
-            ELOG("Error : ID3D12Resource::Map() Failed. errcode = 0x%x", hr);
-            m_pTexture->Release();
-            m_pTexture = nullptr;
+            ELOG("Error : ID3D12Resource::WriteToSubresource() Failed. errcode = 0x%x", hr);
             return false;
         }
-
-        D3D12_MEMCPY_DEST dstData = {};
-        dstData.pData = pData + layout.Offset;
-        dstData.RowPitch = layout.Footprint.RowPitch;
-        dstData.SlicePitch = SIZE_T(layout.Footprint.RowPitch) * SIZE_T(rowCount);
-
-        for(auto z=0u; z<layout.Footprint.Depth; ++z)
-        {
-            auto pDstSlice = static_cast<BYTE*>(dstData.pData) + dstData.SlicePitch * z;
-            auto pSrcSlice = static_cast<const BYTE*>(srcData.pData) + srcData.SlicePitch * LONG_PTR(z);
-            for(auto y=0u; y<rowCount; ++y)
-            {
-                memcpy(pDstSlice + dstData.RowPitch * y,
-                       pSrcSlice + srcData.RowPitch * LONG_PTR(y),
-                       rowSizeInBytes);
-            }
-        }
-
-        m_pTexture->Unmap(0, nullptr);
     }
     else
     {
