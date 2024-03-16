@@ -31,7 +31,7 @@
 #endif//ELOG
 
 // For Agility SDK
-extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 711; }
+extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 613; }
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
 
 namespace /* anonymous */ {

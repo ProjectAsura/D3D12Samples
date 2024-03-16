@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="..\..\..\external\Microsoft.Direct3D.D3D12.1.711.3-preview\build\native\Microsoft.Direct3D.D3D12.props" Condition="Exists('..\..\..\external\Microsoft.Direct3D.D3D12.1.711.3-preview\build\native\Microsoft.Direct3D.D3D12.props')" />
+  <Import Project="..\..\..\external\Microsoft.Direct3D.D3D12.1.613.0\build\native\Microsoft.Direct3D.D3D12.props" Condition="Exists('..\..\..\external\Microsoft.Direct3D.D3D12.1.613.0\build\native\Microsoft.Direct3D.D3D12.props')" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -190,13 +190,13 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\..\..\external\Microsoft.Direct3D.D3D12.1.711.3-preview\build\native\Microsoft.Direct3D.D3D12.targets" Condition="Exists('..\..\..\external\Microsoft.Direct3D.D3D12.1.711.3-preview\build\native\Microsoft.Direct3D.D3D12.targets')" />
+    <Import Project="..\..\..\external\Microsoft.Direct3D.D3D12.1.613.0\build\native\Microsoft.Direct3D.D3D12.targets" Condition="Exists('..\..\..\external\Microsoft.Direct3D.D3D12.1.613.0\build\native\Microsoft.Direct3D.D3D12.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>このプロジェクトは、このコンピューター上にない NuGet パッケージを参照しています。それらのパッケージをダウンロードするには、[NuGet パッケージの復元] を使用します。詳細については、http://go.microsoft.com/fwlink/?LinkID=322105 を参照してください。見つからないファイルは {0} です。</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\..\..\external\Microsoft.Direct3D.D3D12.1.711.3-preview\build\native\Microsoft.Direct3D.D3D12.props')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\external\Microsoft.Direct3D.D3D12.1.711.3-preview\build\native\Microsoft.Direct3D.D3D12.props'))" />
-    <Error Condition="!Exists('..\..\..\external\Microsoft.Direct3D.D3D12.1.711.3-preview\build\native\Microsoft.Direct3D.D3D12.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\external\Microsoft.Direct3D.D3D12.1.711.3-preview\build\native\Microsoft.Direct3D.D3D12.targets'))" />
+    <Error Condition="!Exists('..\..\..\external\Microsoft.Direct3D.D3D12.1.613.0\build\native\Microsoft.Direct3D.D3D12.props')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\external\Microsoft.Direct3D.D3D12.1.613.0\build\native\Microsoft.Direct3D.D3D12.props'))" />
+    <Error Condition="!Exists('..\..\..\external\Microsoft.Direct3D.D3D12.1.613.0\build\native\Microsoft.Direct3D.D3D12.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\external\Microsoft.Direct3D.D3D12.1.613.0\build\native\Microsoft.Direct3D.D3D12.targets'))" />
   </Target>
 </Project>
