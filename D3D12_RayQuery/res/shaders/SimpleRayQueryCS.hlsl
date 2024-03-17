@@ -9,7 +9,7 @@
 //-----------------------------------------------------------------------------
 #include "Math.hlsli"
 #include "RayQuery.hlsli"
-
+#include "Samplers.hlsli"
 
 ///////////////////////////////////////////////////////////////////////////////
 // SceneParam structure
@@ -21,6 +21,7 @@ struct SceneParam
     float4x4    InvView;
     float4x4    InvViewProj;
     uint2       TargetSize;
+    float2      InvTargetSize;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -38,7 +39,6 @@ Texture2D<float4>           Background    : register(t1);
 ByteAddressBuffer           VertexBuffer  : register(t2);
 ByteAddressBuffer           IndexBuffer   : register(t3);
 RWTexture2D<float4>         Canvas        : register(u0);
-SamplerState                LinearSampler : register(s0);
 
 //-----------------------------------------------------------------------------
 //      プリミティブ番号を取得します.
@@ -103,30 +103,32 @@ void main
     if (any(remappedId >= SceneBuffer.TargetSize)) 
     { return; }
 
-    float2 index = (float2)remappedId / (float2)SceneBuffer.TargetSize;
+    //float2 index = (float2)remappedId * SceneBuffer.InvTargetSize;
 
-    float3 rayOrigin;
-    float3 rayDirection;
-    HitRecord hit = Intersect(
-        SceneTlas,
-        RAY_FLAG_NONE,
-        ~0,
-        rayOrigin,
-        rayDirection,
-        1e-3f,
-        10000.0f);
+    //float3 rayOrigin;
+    //float3 rayDirection;
+    //HitRecord hit = Intersect(
+    //    SceneTlas,
+    //    RAY_FLAG_NONE,
+    //    ~0,
+    //    rayOrigin,
+    //    rayDirection,
+    //    1e-3f,
+    //    10000.0f);
 
-    float4 color;
-    if (hit.IsHit())
-    {
-        Vertex v = GetVertex(hit.PrimitiveIndex, hit.GetBaryCentrics());
-        color = v.Color;
-    }
-    else
-    {
-        float2 uv = ToSphereMapCoord(rayDirection);
-        color = Background.SampleLevel(LinearSampler, uv, 0.0f);
-    }
+    //float4 color;
+    //if (hit.IsHit())
+    //{
+    //    Vertex v = GetVertex(hit.PrimitiveIndex, hit.GetBaryCentrics());
+    //    color = v.Color;
+    //}
+    //else
+    //{
+    //    float2 uv = ToSphereMapCoord(rayDirection);
+    //    color = Background.SampleLevel(LinearWrap, uv, 0.0f);
+    //}
+    
+    float4 color = float4(1.0f, 0.0f, 0.0f, 1.0f);
 
     Canvas[remappedId] = color;
 }

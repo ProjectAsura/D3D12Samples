@@ -11,17 +11,28 @@
 #include <fnd/asdxLogger.h>
 #include <fnd/asdxMisc.h>
 
-
+// For Agility SDK
+extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 613; }
+extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
 
 namespace {
+
+#include "../external/asdx12/res/shaders/Compiled/FullScreenVS.inc"
+#include "../res/shaders/Compiled/SimpleRayQueryCS.inc"
+#include "../res/shaders/Compiled/SimplePS.inc"
 
 ///////////////////////////////////////////////////////////////////////////////
 // SceneParam structure
 ///////////////////////////////////////////////////////////////////////////////
 struct alignas(256) SceneParam
 {
+    asdx::Matrix    View;
+    asdx::Matrix    Proj;
     asdx::Matrix    InvView;
     asdx::Matrix    InvViewProj;
+    uint32_t        Width;
+    uint32_t        Height;
+    asdx::Vector2   InvSize;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -64,7 +75,7 @@ bool App::OnInit()
     auto pDevice = asdx::GetD3D12Device();
 
     // グラフィックスキューを取得
-    m_pGraphicsQueue = asdx::GetGraphicsQueue();
+    m_pQueue = asdx::GetGraphicsQueue();
 
     // Ray Tracing Tier 1.1 がサポートされているかどうかチェック.
     {
@@ -121,18 +132,93 @@ bool App::OnInit()
 
     // グラフィックス用のルートシグニチャを生成.
     {
+        D3D12_DESCRIPTOR_RANGE  ranges[1] = {};
+        asdx::InitRangeAsSRV(ranges[0], 0);
+
+        D3D12_ROOT_PARAMETER params[1] = {};
+        asdx::InitAsTable(params[0], 1, ranges, D3D12_SHADER_VISIBILITY_PIXEL);
+
+        D3D12_ROOT_SIGNATURE_DESC desc = {};
+        desc.pParameters        = params;
+        desc.NumParameters      = _countof(params);
+        desc.pStaticSamplers    = asdx::GetStaticSamplers();
+        desc.NumStaticSamplers  = asdx::GetStaticSamplerCounts();
+        desc.Flags              = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+        if (!asdx::InitRootSignature(pDevice, &desc, m_GraphicsRootSig.GetAddress()))
+        {
+            ELOG("Error : InitRootSignature() Failed.");
+            return false;
+        }
     }
 
     // グラフィックス用パイプラインステートを生成.
     {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature         = m_GraphicsRootSig.GetPtr();
+        desc.VS                     = { FullScreenVS, sizeof(FullScreenVS) };
+        desc.PS                     = { SimplePS, sizeof(SimplePS) };
+        desc.BlendState             = asdx::Preset::Opaque;
+        desc.SampleMask             = D3D12_DEFAULT_SAMPLE_MASK;
+        desc.RasterizerState        = asdx::Preset::CullNone;
+        desc.DepthStencilState      = asdx::Preset::DepthNone;
+        desc.InputLayout            = asdx::GetQuadLayout();
+        desc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        desc.NumRenderTargets       = 1;
+        desc.RTVFormats[0]          = m_SwapChainFormat;
+        desc.DSVFormat              = DXGI_FORMAT_UNKNOWN;
+        desc.SampleDesc.Count       = 1;
+        desc.SampleDesc.Quality     = 0;
+
+        if (!m_GraphicsPipelineState.Init(pDevice, &desc))
+        {
+            ELOG("Error : GraphicsPipelineState Initialize Failed.");
+            return false;
+        }
     }
 
     // コンピュート用のルートシグニチャを生成.
     {
+        auto cs = D3D12_SHADER_VISIBILITY_ALL;
+
+        D3D12_DESCRIPTOR_RANGE ranges[4] = {};
+        asdx::InitRangeAsSRV(ranges[0], 1);
+        asdx::InitRangeAsSRV(ranges[1], 2);
+        asdx::InitRangeAsSRV(ranges[2], 3);
+        asdx::InitRangeAsUAV(ranges[3], 0);
+
+        D3D12_ROOT_PARAMETER params[6] = {};
+        asdx::InitAsCBV(params[0], 0, cs); // SceneBuffer.
+        asdx::InitAsSRV(params[1], 0, cs); // SceneTlas
+        asdx::InitAsTable(params[2], 1, &ranges[0], cs); // Background.
+        asdx::InitAsTable(params[3], 1, &ranges[1], cs); // VertexBuffer
+        asdx::InitAsTable(params[4], 1, &ranges[2], cs); // IndexBuffer
+        asdx::InitAsTable(params[5], 1, &ranges[3], cs); // Canvas.
+
+        D3D12_ROOT_SIGNATURE_DESC desc = {};
+        desc.pParameters        = params;
+        desc.NumParameters      = _countof(params);
+        desc.pStaticSamplers    = asdx::GetStaticSamplers();
+        desc.NumStaticSamplers  = asdx::GetStaticSamplerCounts();
+
+        if (!asdx::InitRootSignature(pDevice, &desc, m_ComputeRootSig.GetAddress()))
+        {
+            ELOG("Error : InitRootSignature() Failed.");
+            return false;
+        }
     }
 
     // コンピュート用パイプラインステートを生成.
     {
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};;
+        desc.pRootSignature = m_ComputeRootSig.GetPtr();
+        desc.CS             = { SimpleRayQueryCS, sizeof(SimpleRayQueryCS) };
+
+        if (!m_ComputePipelineState.Init(pDevice, &desc))
+        {
+            ELOG("Error : ComputePipelineState Initialize Failed.");
+            return false;
+        }
     }
 
     // シーンバッファ初期化.
@@ -274,13 +360,13 @@ bool App::OnInit()
     };
 
     // コマンドを実行.
-    m_pGraphicsQueue->Execute(1, pCmds);
+    m_pQueue->Execute(1, pCmds);
 
     // 待機点を発行.
-    m_FrameWaitPoint = m_pGraphicsQueue->Signal();
+    m_WaitPoint = m_pQueue->Signal();
 
     // 完了を待機.
-    m_pGraphicsQueue->Sync(m_FrameWaitPoint);
+    m_pQueue->Sync(m_WaitPoint);
 
     // コマンドリスト破棄.
     setupCommandList.Term();
@@ -309,7 +395,7 @@ void App::OnTerm()
     m_VertexSRV     .Reset();
     m_IndexSRV      .Reset();
 
-    m_pGraphicsQueue = nullptr;
+    m_pQueue = nullptr;
 }
 
 //-----------------------------------------------------------------------------
@@ -317,12 +403,11 @@ void App::OnTerm()
 //-----------------------------------------------------------------------------
 void App::OnFrameRender(asdx::FrameEventArgs& args)
 {
-    if (m_pGraphicsQueue == nullptr)
+    if (m_pQueue == nullptr)
     { return; }
 
-    auto idx = GetCurrentBackBufferIndex();
-    m_GfxCmdList.Reset();
-    auto pCmd = m_GfxCmdList.GetCommandList();
+    auto idx  = GetCurrentBackBufferIndex();
+    auto pCmd = m_GfxCmdList.Reset();
 
     // シーンバッファ更新.
     {
@@ -340,19 +425,58 @@ void App::OnFrameRender(asdx::FrameEventArgs& args)
             1000.0f);
 
         SceneParam res = {};
+        res.View        = view;
+        res.Proj        = proj;
         res.InvView     = asdx::Matrix::Invert(view);
         res.InvViewProj = asdx::Matrix::Invert(proj) * res.InvView;
+        res.Width       = m_Width;
+        res.Height      = m_Height;
+        res.InvSize.x   = 1.0f / float(m_Width);
+        res.InvSize.y   = 1.0f / float(m_Height);
 
         m_SceneBuffer.SwapBuffer();
         m_SceneBuffer.Update(&res, sizeof(res));
     }
 
+    return;
+
     // コンピュートパイプライン実行.
     {
+        m_Canvas.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        uint32_t threadX = (m_Width  + 7) / 8;
+        uint32_t threadY = (m_Height + 7) / 8;
+
+        pCmd->SetComputeRootSignature(m_ComputeRootSig.GetPtr());
+        m_ComputePipelineState.SetState(pCmd);
+
+        pCmd->SetComputeRootConstantBufferView(0, m_SceneBuffer.GetResource()->GetGPUVirtualAddress());
+        pCmd->SetComputeRootShaderResourceView(1, m_TLAS.GetResource()->GetGPUVirtualAddress());
+        pCmd->SetComputeRootDescriptorTable(2, m_Background.GetView()->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(3, m_VertexSRV->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(4, m_IndexSRV->GetHandleGPU());
+        pCmd->SetComputeRootDescriptorTable(5, m_Canvas.GetUAV()->GetHandleGPU());
+
+        pCmd->Dispatch(threadX, threadY, 1);
+
+        asdx::UAVBarrier(pCmd, m_Canvas.GetResource());
+        m_Canvas.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     }
 
     // グラフィックスパイプライン実行.
     {
+        D3D12_CPU_DESCRIPTOR_HANDLE pRTVs[] = {
+            m_ColorTarget[idx].GetRTV()->GetHandleCPU()
+        };
+
+        m_ColorTarget[idx].ChangeState(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        pCmd->OMSetRenderTargets(1, pRTVs, FALSE, nullptr);
+        pCmd->SetGraphicsRootSignature(m_GraphicsRootSig.GetPtr());
+        m_GraphicsPipelineState.SetState(pCmd);
+        pCmd->SetGraphicsRootDescriptorTable(0, m_Canvas.GetSRV()->GetHandleGPU());
+
+        asdx::DrawQuad(pCmd);
+        m_ColorTarget[idx].ChangeState(pCmd, D3D12_RESOURCE_STATE_PRESENT);
     }
 
     // コマンドリストへの記録を終了.
@@ -363,14 +487,14 @@ void App::OnFrameRender(asdx::FrameEventArgs& args)
     };
 
     // 前フレームの描画の完了を待機.
-    if (m_FrameWaitPoint.IsValid())
-    { m_pGraphicsQueue->Sync(m_FrameWaitPoint); }
+    if (m_WaitPoint.IsValid())
+    { m_pQueue->Sync(m_WaitPoint); }
 
     // コマンドを実行.
-    m_pGraphicsQueue->Execute(1, pCmds);
+    m_pQueue->Execute(1, pCmds);
 
     // 待機点を発行.
-    m_FrameWaitPoint = m_pGraphicsQueue->Signal();
+    m_WaitPoint = m_pQueue->Signal();
 
     // 画面に表示.
     Present(0);

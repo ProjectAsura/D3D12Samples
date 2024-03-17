@@ -52,8 +52,8 @@ private:
     //=========================================================================
     // private variables.
     //=========================================================================
-    asdx::CommandQueue* m_pGraphicsQueue = nullptr;
-    asdx::WaitPoint     m_FrameWaitPoint = {};
+    asdx::CommandQueue* m_pQueue    = nullptr;
+    asdx::WaitPoint     m_WaitPoint = {};
 
     asdx::RefPtr<ID3D12RootSignature>   m_GraphicsRootSig;
     asdx::RefPtr<ID3D12RootSignature>   m_ComputeRootSig;
