@@ -966,7 +966,10 @@ bool App::InitApp()
         return false;
     }
 
-    auto heapType  = (m_GpuUploadHeapSupported) ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_DEFAULT;
+    // ヒープタイプを選択.
+    auto heapType  = (m_GpuUploadHeapSupported)
+        ? D3D12_HEAP_TYPE_GPU_UPLOAD
+        : D3D12_HEAP_TYPE_DEFAULT;
 
     // ヒーププロパティの設定.
     D3D12_HEAP_PROPERTIES prop = {};
