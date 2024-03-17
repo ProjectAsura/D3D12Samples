@@ -7,3 +7,6 @@
 [submodule "D3D12_Meshlet/external/asdx12"]
 	path = D3D12_Meshlet/external/asdx12
 	url = https://github.com/ProjectAsura/asdx12
+[submodule "D3D12_RayQuery/external/asdx12"]
+	path = D3D12_RayQuery/external/asdx12
+	url = https://github.com/ProjectAsura/asdx12.git
