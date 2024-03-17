@@ -1,5 +1,5 @@
-﻿# D3D12_Texture
-Texture Mapping Sample Program on D3D12
+﻿# D3D12_GpuUploadHeap
+GPU Upload Heap Sample Program.  
 
 ![キャプチャー画像](./result.png)
 
