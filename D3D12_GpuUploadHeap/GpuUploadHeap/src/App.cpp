@@ -966,13 +966,7 @@ bool App::InitApp()
         return false;
     }
 
-    auto heapType  = D3D12_HEAP_TYPE_DEFAULT;
-    auto initState = D3D12_RESOURCE_STATE_GENERIC_READ;
-    if (m_GpuUploadHeapSupported)
-    {
-        heapType  = D3D12_HEAP_TYPE_GPU_UPLOAD;
-        initState = D3D12_RESOURCE_STATE_COMMON;
-    }
+    auto heapType  = (m_GpuUploadHeapSupported) ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_DEFAULT;
 
     // ヒーププロパティの設定.
     D3D12_HEAP_PROPERTIES prop = {};
@@ -1000,7 +994,7 @@ bool App::InitApp()
         &prop,
         D3D12_HEAP_FLAG_NONE,
         &desc,
-        initState,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
         IID_PPV_ARGS(m_pTexture.GetAddress()) );
     if ( FAILED( hr ) )
