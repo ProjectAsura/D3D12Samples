@@ -92,21 +92,13 @@ bool App::OnInit()
         }
     }
 
-    asdx::CommandList setupCommandList;
-    if (!setupCommandList.Init(pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT))
-    {
-        ELOGA("Error : CommandList::Init() Failed.");
-        return false;
-    }
-
-    auto initCmd = setupCommandList.Reset();
+    auto pCmd = m_GfxCmdList.Reset();
 
     // 背景画像のロード.
     {
         // https://polyhaven.com/a/symmetrical_garden_02 から拝借.
-
         std::string path;
-        if (!asdx::SearchFilePathA("res/textures/symmetrical_garden_02_2k.dds", path))
+        if (!asdx::SearchFilePathA("res/textures/symmetrical_garden_02_2k.hdr", path))
         {
             ELOGA("Error : File Not Found.");
             return false;
@@ -120,7 +112,7 @@ bool App::OnInit()
             return false;
         }
 
-        if (!m_Background.Init(initCmd, res))
+        if (!m_Background.Init(pCmd, res))
         {
             res.Dispose();
             ELOGA("Error : Texture::Init() Failed.");
@@ -165,7 +157,7 @@ bool App::OnInit()
         desc.InputLayout            = asdx::GetQuadLayout();
         desc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         desc.NumRenderTargets       = 1;
-        desc.RTVFormats[0]          = m_SwapChainFormat;
+        desc.RTVFormats[0]          = DXGI_FORMAT_R8G8B8A8_UNORM;
         desc.DSVFormat              = DXGI_FORMAT_UNKNOWN;
         desc.SampleDesc.Count       = 1;
         desc.SampleDesc.Quality     = 0;
@@ -241,9 +233,9 @@ bool App::OnInit()
         desc.MipLevels          = 1;
         desc.SampleDesc.Count   = 1;
         desc.SampleDesc.Quality = 0;
-        desc.InitState          = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        desc.InitState          = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
-        if (!m_Canvas.Init(&desc))
+        if (!m_Canvas.Init1(&desc))
         {
             ELOGA("Error : ComputeTarget::Init() Failed.");
             return false;
@@ -350,13 +342,13 @@ bool App::OnInit()
 
     // ASビルド.
     {
-        m_BLAS.Build(initCmd);
-        m_TLAS.Build(initCmd);
+        m_BLAS.Build(pCmd);
+        m_TLAS.Build(pCmd);
     }
 
-    initCmd->Close();
+    pCmd->Close();
     ID3D12CommandList* pCmds[] = {
-        initCmd
+        pCmd
     };
 
     // コマンドを実行.
@@ -367,9 +359,6 @@ bool App::OnInit()
 
     // 完了を待機.
     m_pQueue->Sync(m_WaitPoint);
-
-    // コマンドリスト破棄.
-    setupCommandList.Term();
 
     return true;
 }
@@ -438,8 +427,6 @@ void App::OnFrameRender(asdx::FrameEventArgs& args)
         m_SceneBuffer.Update(&res, sizeof(res));
     }
 
-    return;
-
     // コンピュートパイプライン実行.
     {
         m_Canvas.ChangeState(pCmd, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -460,7 +447,7 @@ void App::OnFrameRender(asdx::FrameEventArgs& args)
         pCmd->Dispatch(threadX, threadY, 1);
 
         asdx::UAVBarrier(pCmd, m_Canvas.GetResource());
-        m_Canvas.ChangeState(pCmd, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        m_Canvas.ChangeState(pCmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     }
 
     // グラフィックスパイプライン実行.
@@ -471,6 +458,8 @@ void App::OnFrameRender(asdx::FrameEventArgs& args)
 
         m_ColorTarget[idx].ChangeState(pCmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
         pCmd->OMSetRenderTargets(1, pRTVs, FALSE, nullptr);
+        pCmd->RSSetViewports(1, &m_Viewport);
+        pCmd->RSSetScissorRects(1, &m_ScissorRect);
         pCmd->SetGraphicsRootSignature(m_GraphicsRootSig.GetPtr());
         m_GraphicsPipelineState.SetState(pCmd);
         pCmd->SetGraphicsRootDescriptorTable(0, m_Canvas.GetSRV()->GetHandleGPU());

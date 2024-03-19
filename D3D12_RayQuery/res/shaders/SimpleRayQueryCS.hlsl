@@ -103,32 +103,36 @@ void main
     if (any(remappedId >= SceneBuffer.TargetSize)) 
     { return; }
 
-    //float2 index = (float2)remappedId * SceneBuffer.InvTargetSize;
+    float2 index = (float2) remappedId * SceneBuffer.InvTargetSize;
 
-    //float3 rayOrigin;
-    //float3 rayDirection;
-    //HitRecord hit = Intersect(
-    //    SceneTlas,
-    //    RAY_FLAG_NONE,
-    //    ~0,
-    //    rayOrigin,
-    //    rayDirection,
-    //    1e-3f,
-    //    10000.0f);
+    // ÉåÉCÇãÅÇﬂÇÈ.
+    float3 rayOrigin;
+    float3 rayDirection;
+    CalcRay(index, rayOrigin, rayDirection);
+        
+    // Let's ÉåÉCÉgÉå!
+    HitRecord hit = Intersect(
+        SceneTlas,
+        RAY_FLAG_NONE,
+        ~0,
+        rayOrigin,
+        rayDirection,
+        1e-3f,
+        10000.0f);
 
-    //float4 color;
-    //if (hit.IsHit())
-    //{
-    //    Vertex v = GetVertex(hit.PrimitiveIndex, hit.GetBaryCentrics());
-    //    color = v.Color;
-    //}
-    //else
-    //{
-    //    float2 uv = ToSphereMapCoord(rayDirection);
-    //    color = Background.SampleLevel(LinearWrap, uv, 0.0f);
-    //}
+    float4 color;
     
-    float4 color = float4(1.0f, 0.0f, 0.0f, 1.0f);
+    // åç∑ÇµÇΩèÍçá.
+    if (hit.IsHit())
+    {
+        Vertex v = GetVertex(hit.PrimitiveIndex, hit.GetBaryCentrics());
+        color = v.Color;
+    }
+    else
+    {
+        float2 uv = ToSphereMapCoord(rayDirection);
+        color = Background.SampleLevel(LinearWrap, uv, 0.0f);
+    }
 
     Canvas[remappedId] = color;
 }
