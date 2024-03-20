@@ -85,7 +85,7 @@ bool App::OnInit()
         { return false; }
 
         // サポートされていなければ終了.
-        if (options.RaytracingTier != D3D12_RAYTRACING_TIER_1_1)
+        if (options.RaytracingTier < D3D12_RAYTRACING_TIER_1_1)
         {
             ELOGA("Error : RayTracing Tier 1.1 is not supported.");
             return false;
