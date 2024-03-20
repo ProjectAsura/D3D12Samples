@@ -98,7 +98,7 @@ bool App::OnInit()
     {
         // https://polyhaven.com/a/symmetrical_garden_02 から拝借.
         std::string path;
-        if (!asdx::SearchFilePathA("res/textures/symmetrical_garden_02_2k.hdr", path))
+        if (!asdx::SearchFilePathA("res/textures/symmetrical_garden_02_2k.dds", path))
         {
             ELOGA("Error : File Not Found.");
             return false;
