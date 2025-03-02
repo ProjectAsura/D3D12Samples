@@ -19,6 +19,7 @@ using RefPtr = Microsoft::WRL::ComPtr<T>;
 
 namespace {
 
+//! パンくずタグ.
 static const char* g_BreadcrumbTags[] = {
     "SETMARKER",
     "BEGINEVENT",
@@ -73,6 +74,7 @@ struct AllocPair
     const char*                 Tag;
 };
 
+//! アロケーションタイプテーブル.
 static const AllocPair g_AllocTypeTables[] = {
     { D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE              , "COMMAND_QUEUE"               },
     { D3D12_DRED_ALLOCATION_TYPE_COMMAND_ALLOCATOR          , "COMMAND_ALLOCATOR"           },
@@ -105,6 +107,9 @@ static const AllocPair g_AllocTypeTables[] = {
     { D3D12_DRED_ALLOCATION_TYPE_INVALID                    , "INVALID"                     },
 };
 
+//-----------------------------------------------------------------------------
+//! @brief      アロケーションタイプを文字列に変換します.
+//-----------------------------------------------------------------------------
 const char* ToString(D3D12_DRED_ALLOCATION_TYPE value)
 {
     auto count = sizeof(g_AllocTypeTables) / sizeof(g_AllocTypeTables[0]);
@@ -118,6 +123,9 @@ const char* ToString(D3D12_DRED_ALLOCATION_TYPE value)
     return "UNKNOWN";
 }
 
+//-----------------------------------------------------------------------------
+//! @brief      コマンドリストタイプを文字列に変換します.
+//-----------------------------------------------------------------------------
 const char* ToString(D3D12_COMMAND_LIST_TYPE type)
 {
     switch(type)
@@ -151,6 +159,9 @@ const char* ToString(D3D12_COMMAND_LIST_TYPE type)
     }
 }
 
+//-----------------------------------------------------------------------------
+//! @brief      デバイス状態を文字列に変換します.
+//-----------------------------------------------------------------------------
 const char* ToString(D3D12_DRED_DEVICE_STATE state)
 {
     switch(state)
@@ -172,6 +183,9 @@ const char* ToString(D3D12_DRED_DEVICE_STATE state)
     }
 }
 
+//-----------------------------------------------------------------------------
+//! @brief      ログを出力します.
+//-----------------------------------------------------------------------------
 void OutputLog(const char* format, ...)
 {
     char msg[2048]= {};
@@ -187,14 +201,16 @@ void OutputLog(const char* format, ...)
     OutputDebugStringA("\n");
 }
 
-
+//-----------------------------------------------------------------------------
+//! @brief      自動パンくずリストをログ出力します.
+//-----------------------------------------------------------------------------
 void ReportBreadcrumbNode(const D3D12_AUTO_BREADCRUMB_NODE* pNode)
 {
     if (pNode == nullptr)
         return;
 
-    auto count     = pNode->BreadcrumbCount;
-    auto lastIndex = *pNode->pLastBreadcrumbValue;
+    auto count     = pNode->BreadcrumbCount;        // パンくずの数.
+    auto lastIndex = *pNode->pLastBreadcrumbValue;  // 最後に実行された番号.
 
     OutputLog("Breadcrumb Node (0x%p) : ", pNode);
     if (count == lastIndex && count > 0)
@@ -239,13 +255,16 @@ void ReportBreadcrumbNode(const D3D12_AUTO_BREADCRUMB_NODE* pNode)
     }
 }
 
+//-----------------------------------------------------------------------------
+//! @brief      自動パンくずリストをログ出力します.
+//-----------------------------------------------------------------------------
 void ReportBreadcrumbNode1(const D3D12_AUTO_BREADCRUMB_NODE1* pNode)
 {
     if (pNode == nullptr)
         return;
 
-    auto count     = pNode->BreadcrumbCount;
-    auto lastIndex = *pNode->pLastBreadcrumbValue;
+    auto count     = pNode->BreadcrumbCount;        //!< パンくずの数.
+    auto lastIndex = *pNode->pLastBreadcrumbValue;  //!< 最後に実行された番号.
 
     OutputLog("Breadcrumb Node (0x%p) : ", pNode);
     if (count == lastIndex && count > 0)
@@ -297,6 +316,9 @@ void ReportBreadcrumbNode1(const D3D12_AUTO_BREADCRUMB_NODE1* pNode)
     }
 }
 
+//-----------------------------------------------------------------------------
+//! @brief      アロケーションノードをログ出力します.
+//-----------------------------------------------------------------------------
 void ReportAllocationNode(const D3D12_DRED_ALLOCATION_NODE* pNode)
 {
     if (pNode == nullptr)
@@ -308,6 +330,9 @@ void ReportAllocationNode(const D3D12_DRED_ALLOCATION_NODE* pNode)
     OutputLog("    Has Next       : %s", (pNode->pNext == nullptr) ? "No" : "Yes");
 }
 
+//-----------------------------------------------------------------------------
+//! @brief      アロケーションノードをログ出力します.
+//-----------------------------------------------------------------------------
 void ReportAllocationNode1(const D3D12_DRED_ALLOCATION_NODE1* pNode)
 {
     if (pNode == nullptr)
@@ -320,6 +345,9 @@ void ReportAllocationNode1(const D3D12_DRED_ALLOCATION_NODE1* pNode)
     OutputLog("    pObject        : 0x%p", pNode->pObject);
 }
 
+//-----------------------------------------------------------------------------
+//! @brief      ページフォルトをログ出力します.
+//-----------------------------------------------------------------------------
 void ReportPageFaultOutput(const D3D12_DRED_PAGE_FAULT_OUTPUT& pageFaultOutput)
 {
     OutputLog("PageFaultOutput : ");
@@ -362,6 +390,9 @@ void ReportPageFaultOutput(const D3D12_DRED_PAGE_FAULT_OUTPUT& pageFaultOutput)
     }
 }
 
+//-----------------------------------------------------------------------------
+//! @brief      ページフォルト情報をログ出力します.
+//-----------------------------------------------------------------------------
 void ReportPageFaultOutput1(const D3D12_DRED_PAGE_FAULT_OUTPUT1& pageFaultOutput)
 {
     OutputLog("PageFaultOutput : ");
@@ -404,6 +435,9 @@ void ReportPageFaultOutput1(const D3D12_DRED_PAGE_FAULT_OUTPUT1& pageFaultOutput
     }
 }
 
+//-----------------------------------------------------------------------------
+//! @brief      ページフォルト情報をログ出力します.
+//-----------------------------------------------------------------------------
 void ReportPageFaultOutput2(const D3D12_DRED_PAGE_FAULT_OUTPUT2& pageFaultOutput)
 {
     OutputLog("PageFaultOutput : ");
@@ -447,6 +481,9 @@ void ReportPageFaultOutput2(const D3D12_DRED_PAGE_FAULT_OUTPUT2& pageFaultOutput
     }
 }
 
+//-----------------------------------------------------------------------------
+//! @brief      デバイス削除拡張データをログ出力します.
+//-----------------------------------------------------------------------------
 bool ReportDeviceRemovedExtendedData(ID3D12Device* pDevice)
 {
     RefPtr<ID3D12DeviceRemovedExtendedData> dred;
@@ -476,6 +513,9 @@ bool ReportDeviceRemovedExtendedData(ID3D12Device* pDevice)
     return true;
 }
 
+//-----------------------------------------------------------------------------
+//! @brief      デバイス削除拡張データをログ出力します.
+//-----------------------------------------------------------------------------
 bool ReportDeviceRemovedExtendedData1(ID3D12Device* pDevice)
 {
     RefPtr<ID3D12DeviceRemovedExtendedData1> dred;
@@ -528,6 +568,9 @@ bool ReportDeviceRemovedExtendedData1(ID3D12Device* pDevice)
     return true;
 }
 
+//-----------------------------------------------------------------------------
+//! @brief      デバイス削除拡張データをログ出力します.
+//-----------------------------------------------------------------------------
 bool ReportDeviceRemovedExtendedData2(ID3D12Device* pDevice)
 {
     RefPtr<ID3D12DeviceRemovedExtendedData2> dred;
@@ -594,6 +637,9 @@ bool ReportDeviceRemovedExtendedData2(ID3D12Device* pDevice)
 
 } // namespace
 
+//-----------------------------------------------------------------------------
+//! @brief      DRED情報を出力します.
+//-----------------------------------------------------------------------------
 void ReportDRED(HRESULT hr, ID3D12Device* pDevice)
 {
     OutputLog("ErrorCode : 0x%x - %s", hr, std::system_category().message(hr).c_str());
@@ -603,12 +649,17 @@ void ReportDRED(HRESULT hr, ID3D12Device* pDevice)
     auto reason = pDevice->GetDeviceRemovedReason();
     OutputLog("Device Removed Reason : 0x%x - %s", reason, std::system_category().message(reason).c_str());
 
+    // 新しいバージョンから順に実行していき，実行出来たら終了.
+
+    // DRED 1.2
     if (ReportDeviceRemovedExtendedData2(pDevice))
     { return; }
 
+    // DRED 1.1
     if (ReportDeviceRemovedExtendedData1(pDevice))
     { return; }
 
+    // DRED 1.0
     if (ReportDeviceRemovedExtendedData(pDevice))
     { return; }
 }
