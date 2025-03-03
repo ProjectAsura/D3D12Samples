@@ -1,0 +1,4 @@
+
+NVIDIA_Nsight_Aftermath_SDK_2025.1.0.25009
+
+をこのディレクトリに配置してください.
