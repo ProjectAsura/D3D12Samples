@@ -19,6 +19,7 @@ struct ID3D12Device;
 //! 
 //! @param[in]      appName                 アプリ名.
 //! @param[in]      appVersion              アプリバージョン.
+//! @param[in]      outputDir               出力ディレクトリ.
 //! @param[in]      shaderBinaryDirs        シェーダバイナリディレクトリ.
 //! @param[in]      shaderPdbDirs           シェーダPDBディレクトリ.
 //! @note       InitAftermath() よりも前にコールしてください.
@@ -26,6 +27,7 @@ struct ID3D12Device;
 void InitGpuCrashTracker(
     const char* appName,
     const char* appVersion,
+    const char* outputDir,
     const std::vector<std::string>& shaderBinaryDirs,
     const std::vector<std::string>& shaderPdbDirs);
 

@@ -5,6 +5,8 @@
 //-------------------------------------------------------------------------------------------------
 #pragma once
 
+#define AFTERMATH_ENABLE    (1)
+
 //-------------------------------------------------------------------------------------------------
 // Includes
 //-------------------------------------------------------------------------------------------------
@@ -15,6 +17,9 @@
 #include <asdxMath.h>
 #include <asdxResTGA.h>
 
+#if AFTERMATH_ENABLE
+#include <GFSDK_Aftermath.h>
+#endif
 
 //-------------------------------------------------------------------------------------------------
 // Linker
@@ -110,6 +115,15 @@ private:
     ResConstantBuffer                        m_ConstantBufferData;
     UINT8*                                   m_pCbvDataBegin;
     FLOAT                                    m_RotateAngle;
+
+#if AFTERMATH_ENABLE
+    GFSDK_Aftermath_ContextHandle           m_CmdListHandle                     = nullptr;
+    GFSDK_Aftermath_ResourceHandle          m_RenderTargetHandle[BufferCount]   = {};
+    GFSDK_Aftermath_ResourceHandle          m_DepthStencilHandle                = nullptr;
+    GFSDK_Aftermath_ResourceHandle          m_VertexBufferHandle                = nullptr;
+    GFSDK_Aftermath_ResourceHandle          m_ConstantBufferHandle              = nullptr;
+    GFSDK_Aftermath_ResourceHandle          m_TextureHandle                     = nullptr;
+#endif
 
     //=============================================================================================
     // private methods.

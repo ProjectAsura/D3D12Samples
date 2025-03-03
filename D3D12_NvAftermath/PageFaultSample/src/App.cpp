@@ -15,6 +15,7 @@
 #include <TextureHelper.h>
 #include <App.h>
 #include <DredReport.h>
+#include <AftermathHelper.h>
 
 //-------------------------------------------------------------------------------------------------
 // Linker
@@ -121,6 +122,61 @@ bool SearchFilePath( const char16* filePath, std::wstring& result )
     }
 
     return false;
+}
+
+#if AFTERMATH_ENABLE
+inline void SafeUnregister(GFSDK_Aftermath_ResourceHandle& handle)
+{
+    if (handle != nullptr)
+    {
+        GFSDK_Aftermath_DX12_UnregisterResource(handle);
+        handle = nullptr;
+    }
+}
+
+inline void SafeReleaseContext(GFSDK_Aftermath_ContextHandle& handle)
+{
+    if (handle != nullptr)
+    {
+        GFSDK_Aftermath_ReleaseContextHandle(handle);
+        handle = nullptr;
+    }
+}
+#endif
+
+//-----------------------------------------------------------------------------
+//      ファイルパスからディレクトリ名を取得します.
+//-----------------------------------------------------------------------------
+std::string GetDirectoryPathA( const char* filePath )
+{
+    std::string path = filePath;
+    auto idx = path.find_last_of( "\\" );
+    if ( idx != std::string::npos )
+    {
+        auto result = path.substr( 0, idx + 1 );
+        return result;
+    }
+
+    idx = path.find_last_of( "/" );
+    if ( idx != std::string::npos )
+    {
+        auto result = path.substr( 0, idx + 1 );
+        return result;
+    }
+
+    return std::string();
+}
+
+//-----------------------------------------------------------------------------
+//      実行ファイルのファイルパスを取得します.
+//-----------------------------------------------------------------------------
+std::string GetExePathA()
+{
+    char exePath[ 520 ] = { 0 };
+    GetModuleFileNameA( nullptr, exePath, 520  );
+    exePath[ 519 ] = '\0'; // null終端化.
+
+    return GetDirectoryPathA( exePath );
 }
 
 } // namespace /* anonymous */
@@ -311,7 +367,25 @@ void App::TermWnd()
 bool App::InitD3D()
 {
     HRESULT hr = S_OK;
-#if defined(DEBUG) || defined(_DEBUG)
+#if AFTERMATH_ENABLE
+    // AftermathとDebugLayerやPIXとは一緒に使用できない.
+    // 使おうとしてもAftermath側が失敗する.
+    {
+        std::vector<std::string> shaderBinaryDirs;
+        std::vector<std::string> shaderPdbDirs;
+
+        shaderBinaryDirs.push_back(GetExePathA());
+        shaderPdbDirs   .push_back(GetExePathA());
+
+        // D3D12 Deviceの初期化前に呼び出す.
+        InitGpuCrashTracker(
+            "SimpleSample",
+            "ver 1.0 - Build 2025/03/03",
+            "./gpu_crush",
+            shaderBinaryDirs,
+            shaderPdbDirs);
+    }
+ #elif defined(DEBUG) || defined(_DEBUG)
     {
         asdx::RefPtr<ID3D12Debug> pDebug;
         hr = D3D12GetDebugInterface( IID_PPV_ARGS(pDebug.GetAddress()) );
@@ -322,6 +396,7 @@ bool App::InitD3D()
     }
 #endif
 
+    // DREDの設定.
     {
         asdx::RefPtr<ID3D12DeviceRemovedExtendedDataSettings1> dredSettings1;
         hr = D3D12GetDebugInterface(IID_PPV_ARGS(dredSettings1.GetAddress()));
@@ -360,6 +435,14 @@ bool App::InitD3D()
         ELOG( "Error : D3D12CreateDevice() Failed." );
         return false;
     }
+
+#if AFTERMATH_ENABLE
+    if (!InitAftermath(m_pDevice.GetPtr()))
+    {
+        ELOG("Error : InitAftermath() Failed.");
+        return false;
+    }
+#endif
 
     // コマンドキューを生成.
     {
@@ -468,6 +551,12 @@ bool App::InitD3D()
 
             // ハンドルのポインタを進める.
             handle.ptr += m_RtvDescriptorSize;
+
+        #if AFTERMATH_ENABLE
+            auto ret = GFSDK_Aftermath_DX12_RegisterResource(m_pRenderTarget[i].GetPtr(), &m_RenderTargetHandle[i]);
+            if (!GFSDK_Aftermath_SUCCEED(ret))
+            { ELOG("Error : GFSDK_Aftermath_DX12_RegisterResource() Failed. errcode = 0x%x", ret); }
+        #endif
         }
     }
 
@@ -526,6 +615,12 @@ bool App::InitD3D()
             m_pDepthStencil.GetPtr(),
             &dsvDesc,
             m_pDsvHeap->GetCPUDescriptorHandleForHeapStart() );
+
+    #if AFTERMATH_ENABLE
+        auto ret = GFSDK_Aftermath_DX12_RegisterResource(m_pDepthStencil.GetPtr(), &m_DepthStencilHandle);
+        if (!GFSDK_Aftermath_SUCCEED(ret))
+        { ELOG("Error : GFSDK_Aftermath_DX12_RegisterResource() Failed. errcode = 0x%x", ret); }
+    #endif
     }
 
     // コマンドアロケータを生成.
@@ -539,16 +634,24 @@ bool App::InitD3D()
     }
 
     // コマンドリストを生成.
-    hr = m_pDevice->CreateCommandList(
-        0, 
-        D3D12_COMMAND_LIST_TYPE_DIRECT,
-        m_pCmdAllocator.GetPtr(),
-        nullptr,
-        IID_PPV_ARGS(m_pCmdList.GetAddress()) );
-    if ( FAILED( hr ) )
     {
-        ELOG( "Error : ID3D12Device::CreateCommandList() Failed." );
-        return false;
+        hr = m_pDevice->CreateCommandList(
+            0, 
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            m_pCmdAllocator.GetPtr(),
+            nullptr,
+            IID_PPV_ARGS(m_pCmdList.GetAddress()) );
+        if ( FAILED( hr ) )
+        {
+            ELOG( "Error : ID3D12Device::CreateCommandList() Failed." );
+            return false;
+        }
+
+    #if AFTERMATH_ENABLE
+        auto ret = GFSDK_Aftermath_DX12_CreateContextHandle(m_pCmdList.GetPtr(), &m_CmdListHandle);
+        if (!GFSDK_Aftermath_SUCCEED(ret))
+        { ELOG("Error : GFSDK_Aftermath_DX12_CreateContextHandle() Failed. errcode = 0x%x", ret); }
+    #endif
     }
 
     // フェンスを生成.
@@ -609,6 +712,16 @@ void App::TermD3D()
     m_pCmdAllocator .Reset();
     m_pCmdQueue     .Reset();
     m_pDevice       .Reset();
+
+#if AFTERMATH_ENABLE
+    SafeUnregister(m_DepthStencilHandle);
+    for(auto i=0; i<BufferCount; ++i)
+    { SafeUnregister(m_RenderTargetHandle[i]); }
+    SafeReleaseContext(m_CmdListHandle);
+    
+    TermAftermath();
+    TermGpuCrashTracker();
+#endif
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -871,6 +984,12 @@ bool App::InitApp()
         m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGPUVirtualAddress();
         m_VertexBufferView.StrideInBytes  = sizeof(Vertex);
         m_VertexBufferView.SizeInBytes    = sizeof(vertices);
+
+    #if AFTERMATH_ENABLE
+        auto ret = GFSDK_Aftermath_DX12_RegisterResource(m_pVertexBuffer.GetPtr(), &m_VertexBufferHandle);
+        if (!GFSDK_Aftermath_SUCCEED(ret))
+        { ELOG("Error : GFSDK_Aftermath_DX12_RegisterResource() Failed. errcode = 0x%x", ret); }
+    #endif
     }
 
     // CBV・SRV・UAV用ディスクリプターヒープを生成.
@@ -955,6 +1074,12 @@ bool App::InitApp()
 
         // コピる.
         memcpy( m_pCbvDataBegin, &m_ConstantBufferData, sizeof(m_ConstantBufferData) );
+
+    #if AFTERMATH_ENABLE
+        auto ret = GFSDK_Aftermath_DX12_RegisterResource(m_pConstantBuffer.GetPtr(), &m_ConstantBufferHandle);
+        if (!GFSDK_Aftermath_SUCCEED(ret))
+        { ELOG("Error : GFSDK_Aftermath_DX12_RegisterResource() Failed. errcode = 0x%x", ret); }
+    #endif
     }
 
     // TGAファイルを検索.
@@ -1043,6 +1168,14 @@ bool App::InitApp()
     handle.ptr += m_CbvSrvDescriptorSize;
     m_pDevice->CreateShaderResourceView( m_pTexture.GetPtr(), &viewDesc, handle );
 
+    #if AFTERMATH_ENABLE
+    {
+        auto err = GFSDK_Aftermath_DX12_RegisterResource(m_pTexture.GetPtr(), &m_TextureHandle);
+        if (!GFSDK_Aftermath_SUCCEED(err))
+        { ELOG("Error : GFSDK_Aftermath_DX12_RegsiterResource() Failed. errcode = 0x%x", err); }
+    }
+    #endif
+
     // 正常終了.
     return true;
 }
@@ -1062,8 +1195,16 @@ void App::TermApp()
     m_VertexBufferView.SizeInBytes    = 0;
     m_VertexBufferView.StrideInBytes  = 0;
 
+    m_pTexture.Reset();
+
     m_pPipelineState.Reset();
     m_pRootSignature.Reset();
+
+#if AFTERMATH_ENABLE
+    SafeUnregister(m_ConstantBufferHandle);
+    SafeUnregister(m_VertexBufferHandle);
+    SafeUnregister(m_TextureHandle);
+#endif
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1084,6 +1225,13 @@ void App::OnRender(FLOAT elapsedSec)
     // コマンドアロケータとコマンドリストをリセット.
     m_pCmdAllocator->Reset();
     m_pCmdList->Reset( m_pCmdAllocator.GetPtr(), m_pPipelineState.GetPtr() );
+
+#if AFTERMATH_ENABLE
+    {
+        const char* tag = "TriangleDraw";
+        GFSDK_Aftermath_SetEventMarker(m_CmdListHandle, tag, uint32_t(strlen(tag)));
+    }
+#endif
 
     // ディスクリプタヒープを設定.
     m_pCmdList->SetDescriptorHeaps( 1, m_pCbvSrvHeap.GetAddress() );
@@ -1163,6 +1311,9 @@ void App::OnRender(FLOAT elapsedSec)
     {
         ELOG("Error : IDXGISwapChain::Preset() Failed. errcode = 0x%x", hr);
         ReportDRED(hr, m_pDevice.GetPtr());
+    #if AFTERMATH_ENABLE
+        ReportAftermath();
+    #endif
         abort();
     }
 
